@@ -18,11 +18,13 @@ import torch.nn.functional as F
 import torch.optim as optim
 from tensorboardX import SummaryWriter
 from torch import nn
+from torch.utils import data
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
-from advent.model.decoder import decoder
+from advent.dataset.flatfolder import FlatFolderDataset
 from advent.model.discriminator import get_fc_discriminator
+from advent.model.hm import HybridMemory
 from advent.utils.func import adjust_learning_rate, adjust_learning_rate_discriminator
 from advent.utils.func import loss_calc, bce_loss
 from advent.utils.loss import entropy_loss
@@ -218,10 +220,43 @@ def draw_in_tensorboard(writer, images, i_iter, pred_main, num_classes, type_):
     writer.add_image(f'Entropy - {type_}', grid_image, i_iter)
 
 
-def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, batch_style):
+def train_minent(model, trainloader, targetloader, cfg):
     """ UDA training with minEnt
     """
     # Create the model and start the training.
+    device = cfg.GPU_ID
+    if cfg.TRAIN.switchAdain:
+        style_dataset = FlatFolderDataset(root=cfg.DATA_DIRECTORY_STYLE,
+                                          base_size=cfg.TRAIN.INPUT_SIZE_STYLE,
+                                          mean=cfg.TRAIN.IMG_MEAN_style)
+        style_dataloader = iter(data.DataLoader(style_dataset,
+                                                batch_size=cfg.TRAIN.BATCH_SIZE_STYLE,
+                                                shuffle=False,
+                                                num_workers=0,
+                                                pin_memory=True,
+                                                drop_last=True))
+
+        batch_style = next(style_dataloader)
+
+    if cfg.TRAIN.switchcontra:
+        # initialize HybridMemory
+        # src_center = calculate_src_center(source_loader, device, model)
+        # torch.save(src_center, "./src_center_minent_20.pkl")
+        src_center = torch.load("./src_center_minent_20.pkl").to(device)
+
+        # tgt_center = calculate_tgt_center(target_loader, device, model, cfg.NUM_CLASSES, src_center, cfg)
+        # torch.save(tgt_center, "./tgt_center_minent_20.pkl")
+        tgt_center = torch.load("./tgt_center_minent_20.pkl").to(device)
+
+        # Hybrid memory 存储源域的原型（需要每次迭代更新）和目标域的聚类后的原型，聚类时根据判别标准进行选择
+        src_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,
+                                  temp=cfg.TRAIN.contra_temp, momentum=cfg.TRAIN.contra_momentum).to(device)
+        tgt_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,
+                                  temp=cfg.TRAIN.contra_temp, momentum=cfg.TRAIN.contra_momentum).to(device)
+
+        src_memory.features = src_center
+        tgt_memory.features = tgt_center
+
     input_size_source = cfg.TRAIN.INPUT_SIZE_SOURCE
     input_size_target = cfg.TRAIN.INPUT_SIZE_TARGET
     device = cfg.GPU_ID
@@ -243,7 +278,7 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, 
                           momentum=cfg.TRAIN.MOMENTUM,
                           weight_decay=cfg.TRAIN.WEIGHT_DECAY)
 
-    decoder.load_state_dict(torch.load(cfg.TRAIN.RESTORE_FROM_decoder))
+    # decoder.load_state_dict(torch.load(cfg.TRAIN.RESTORE_FROM_decoder))
 
     # interpolate output segmaps
     interp = nn.Upsample(size=(input_size_source[1], input_size_source[0]), mode='bilinear',
@@ -255,10 +290,7 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, 
     targetloader_iter = enumerate(targetloader)
     for i_iter in tqdm(range(cfg.TRAIN.EARLY_STOP)):
 
-        # reset optimizers
         optimizer.zero_grad()
-
-        # adapt LR if needed
         adjust_learning_rate(optimizer, i_iter, cfg)
 
         # UDA Training
@@ -266,11 +298,16 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, 
         _, batch = trainloader_iter.__next__()
         images_source, src_label, _, _ = batch
         pred_src_aux, pred_src_main, f_out_s = model(images_source.cuda(device))
+        if cfg.TRAIN.switchAdain:
+            f_out_s = adain(model, batch_style, device, f_out_s, cfg)
+            pred_src_main = model.layer6(f_out_s)
+
         if cfg.TRAIN.MULTI_LEVEL:
             pred_src_aux = interp(pred_src_aux)
             loss_seg_src_aux = loss_calc(pred_src_aux, src_label, device)
         else:
             loss_seg_src_aux = 0
+
         pred_src_main = interp(pred_src_main)
         loss_seg_src_main = loss_calc(pred_src_main, src_label, device)
         loss = (cfg.TRAIN.LAMBDA_SEG_MAIN * loss_seg_src_main
@@ -280,6 +317,10 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, 
         _, batch = targetloader_iter.__next__()
         images, tgt_label, _, _ = batch
         pred_trg_aux, pred_trg_main, f_out_t = model(images.cuda(device))
+        if cfg.TRAIN.switchAdain:
+            f_out_t = adain(model, batch_style, device, f_out_s, cfg)
+            pred_trg_main = model.layer6(f_out_t)
+
         pred_trg_aux = interp_target(pred_trg_aux)
         pred_trg_main = interp_target(pred_trg_main)
         pred_prob_trg_aux = F.softmax(pred_trg_aux)
@@ -290,51 +331,51 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, 
         loss += (cfg.TRAIN.LAMBDA_ENT_AUX * loss_target_entp_aux
                  + cfg.TRAIN.LAMBDA_ENT_MAIN * loss_target_entp_main)
 
-        if cfg.TRAIN.switchAdain:
-            f_out_s = adain(model, batch_style, device, f_out_s, cfg, decoder)
-            f_out_t = adain(model, batch_style, device, f_out_s, cfg, decoder)
-
-        # contrastive loss
-        tgt_label = F.interpolate(tgt_label.float().unsqueeze(1), f_out_t.size()[2:],
-                                  mode="nearest").int().view(-1, 1).to(device)  # 4,1, 160,320
-        # t_labels_prob = torch.argmax(F.interpolate(f_out_t_class.data, f_out_t.size()[2:], mode="nearest"),
-        #                         dim=1).flatten() + 19
-        t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg).to(device)
-        t_center = calculate_average(f_out_t, t_labels, device)
-        t_labels[t_labels == 255] = -1
-        tgt_label[tgt_label == 255] = -1
-
-        src_label = F.interpolate(src_label.float().unsqueeze(1), size=f_out_s.size()[2:], mode="nearest").to(device)
-        s_center = calculate_average(f_out_s, src_label, device)
-        src_label[src_label == 255] = -1
-
-        # print("i,s", images_source.shape, f_out_s.shape)  # [19, 2048] [1, 2048, 81, 161]
-        # print(src_label.shape, src_label.min(), src_label.max()) 1, 1, 65, 129
-        loss_s = src_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
-                            src_label.flatten().long(), torch.arange(19), s_center)
-        loss_t = tgt_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
-                            t_labels.flatten().long(), torch.arange(19), t_center)
-
-        loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
-
-        loss.backward()
-        optimizer.step()
-        # 统计使用的标签中正确的部分
-        t_labels = t_labels.flatten()
-        a, b = t_labels[:-1:300], tgt_label[:-1:300].squeeze(1)
-        a = a[b != -1]
-        b = b[b != -1]
-        pseudo_acc = 100 * (a == b).sum() / len(b)
-        prev_pseudo_acc = 100 * (t_labels[:-1:300] == (tgt_label[:-1:300].squeeze(1))).sum() / len(tgt_label[:-1:300])
-
         current_losses = {'loss_seg_src_aux': loss_seg_src_aux,
                           'loss_seg_src_main': loss_seg_src_main,
                           'loss_ent_aux': loss_target_entp_aux,
-                          'loss_ent_main': loss_target_entp_main,
-                          'loss_contra_src': loss_s,
-                          'loss_contra_tgt': loss_t,
-                          'pseudo_acc': pseudo_acc,
-                          'prev_pseudo_acc': prev_pseudo_acc}
+                          'loss_ent_main': loss_target_entp_main}
+
+        # contrastive loss
+        if cfg.TRAIN.switchcontra:
+            tgt_label = F.interpolate(tgt_label.float().unsqueeze(1), f_out_t.size()[2:],
+                                      mode="nearest").int().view(-1, 1).to(device)  # 4,1, 160,320
+            # t_labels_prob = torch.argmax(F.interpolate(f_out_t_class.data, f_out_t.size()[2:], mode="nearest"),
+            #                         dim=1).flatten() + 19
+            t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg).to(device)
+            t_center = calculate_average(f_out_t, t_labels, device)
+            t_labels[t_labels == 255] = -1
+            tgt_label[tgt_label == 255] = -1
+
+            src_label = F.interpolate(src_label.float().unsqueeze(1), size=f_out_s.size()[2:], mode="nearest").to(
+                device)
+            s_center = calculate_average(f_out_s, src_label, device)
+            src_label[src_label == 255] = -1
+
+            # print("i,s", images_source.shape, f_out_s.shape)  # [19, 2048] [1, 2048, 81, 161]
+            # print(src_label.shape, src_label.min(), src_label.max()) 1, 1, 65, 129
+            loss_s = src_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
+                                src_label.flatten().long(), torch.arange(19), s_center)
+            loss_t = tgt_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
+                                t_labels.flatten().long(), torch.arange(19), t_center)
+
+            loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
+
+            # 统计使用的标签中正确的部分
+            t_labels = t_labels.flatten()
+            a, b = t_labels[:-1:300], tgt_label[:-1:300].squeeze(1)
+            a = a[b != -1]
+            b = b[b != -1]
+            pseudo_acc = 100 * (a == b).sum() / len(b)
+            prev_pseudo_acc = 100 * (t_labels[:-1:300] == (tgt_label[:-1:300].squeeze(1))).sum() / len(
+                tgt_label[:-1:300])
+            current_losses.update({'loss_contra_src': loss_s,
+                                   'loss_contra_tgt': loss_t,
+                                   'pseudo_acc': pseudo_acc,
+                                   'prev_pseudo_acc': prev_pseudo_acc})
+
+        loss.backward()
+        optimizer.step()
 
         if i_iter % cfg.TRAIN.SAVE_PRED_EVERY == 0 and i_iter != 0:
             print('taking snapshot ...')
@@ -352,16 +393,11 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, 
             if i_iter % cfg.TRAIN.TENSORBOARD_VIZRATE == cfg.TRAIN.TENSORBOARD_VIZRATE - 1:
                 draw_in_tensorboard(writer, images, i_iter, pred_trg_main, num_classes, 'T')
                 draw_in_tensorboard(writer, images_source, i_iter, pred_src_main, num_classes, 'S')
-                # if cfg.TRAIN.switchAdain and i_iter % 2000 == 0:
-                #     writer.add_image(str(i_iter//2000) + '/images_source', images_source, i_iter//2000)
-                #     writer.add_image(str(i_iter//2000) + '/images_source_transfer', pic_s, i_iter//2000)
-                #     writer.add_image(str(i_iter//2000) + '/Images', images, i_iter//2000)
-                #     writer.add_image(str(i_iter//2000) + '/Images_transfer', pic_t, i_iter//2000)
             if i_iter % cfg.TRAIN.print_lossrate == cfg.TRAIN.print_lossrate - 1:
                 print_losses(current_losses, i_iter)
 
 
-def adain(model, batch_style, device, content_feat, cfg, decoder_model):
+def adain(model, batch_style, device, content_feat, cfg, decoder_model=None):
     with torch.no_grad():
         _, _, style_feat = model(batch_style.permute(0, 1, 3, 2).to(device))
         # print("b,s", batch_style.shape, style_feat.shape)
@@ -376,7 +412,7 @@ def adain(model, batch_style, device, content_feat, cfg, decoder_model):
         feat = cfg.TRAIN.alpha * feat + (1 - cfg.TRAIN.alpha) * content_f
 
         # pic = decoder_model(feat)
-    return feat#, pic
+    return feat  # , pic
 
 
 def calc_mean_std(feat, eps=1e-5):
@@ -391,7 +427,8 @@ def calc_mean_std(feat, eps=1e-5):
 
 
 def adaptive_instance_normalization(content_feat, style_feat):
-    assert (content_feat.size()[:2] == style_feat.size()[:2]), "style size is {}, whereas contens size is {}".format(style_feat.size(), content_feat.size())
+    assert (content_feat.size()[:2] == style_feat.size()[:2]), "style size is {}, whereas contens size is {}".format(
+        style_feat.size(), content_feat.size())
     size = content_feat.size()
     style_mean, style_std = calc_mean_std(style_feat)
     content_mean, content_std = calc_mean_std(content_feat)
@@ -486,9 +523,9 @@ def to_numpy(tensor):
         return tensor.data.cpu().numpy()
 
 
-def train_domain_adaptation(model, trainloader, targetloader, cfg, src_memory, tgt_memory, batch_style):
+def train_domain_adaptation(model, trainloader, targetloader, cfg):
     if cfg.TRAIN.DA_METHOD == 'MinEnt':
-        train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, batch_style)
+        train_minent(model, trainloader, targetloader, cfg)
     elif cfg.TRAIN.DA_METHOD == 'AdvEnt':
         train_advent(model, trainloader, targetloader, cfg)
     else:

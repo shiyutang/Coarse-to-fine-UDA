@@ -18,7 +18,7 @@ from advent.utils.serialization import yaml_load
 cfg = EasyDict()
 
 # COMMON CONFIGS
-cfg.name = '0128_addcontra_clossw0.001_0.07temp_0.05thresh_0.99momentum_addadain'
+cfg.name = '0201_nocontra_addadain'
 # source domain
 cfg.SOURCE = 'GTA'
 # target domain
@@ -78,7 +78,7 @@ cfg.TRAIN.LAMBDA_ADV_AUX = 0.0002
 cfg.TRAIN.LAMBDA_ENT_MAIN = 0.001
 cfg.TRAIN.LAMBDA_ENT_AUX = 0.0002
 # contrastive parameters
-cfg.TRAIN.switchcontra = True
+cfg.TRAIN.switchcontra = False
 cfg.TRAIN.contra_temp = 0.07
 cfg.TRAIN.contra_momentum = 0.9
 cfg.TRAIN.LAMBDA_CONTRA_S = 0.001

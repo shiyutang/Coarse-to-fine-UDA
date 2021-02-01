@@ -147,43 +147,11 @@ def main():
                                     pin_memory=True,
                                     worker_init_fn=_init_fn)
 
-    if cfg.TRAIN.switchAdain:
-        style_dataset = FlatFolderDataset(root=cfg.DATA_DIRECTORY_STYLE,
-                                          base_size=cfg.TRAIN.INPUT_SIZE_STYLE,
-                                          mean=cfg.TRAIN.IMG_MEAN_style)
-        style_dataloader = iter(data.DataLoader(style_dataset,
-                                                batch_size=cfg.TRAIN.BATCH_SIZE_STYLE,
-                                                shuffle=False,
-                                                num_workers=0,
-                                                pin_memory=True,
-                                                drop_last=True))
-
-        batch_style = next(style_dataloader)
-
     with open(osp.join(cfg.TRAIN.SNAPSHOT_DIR, 'train_cfg.yml'), 'w') as yaml_file:
         yaml.dump(cfg, yaml_file, default_flow_style=False)
 
-    if cfg.TRAIN.switchcontra:
-        # initialize HybridMemory
-        # src_center = calculate_src_center(source_loader, device, model)
-        # torch.save(src_center, "./src_center_minent_20.pkl")
-        src_center = torch.load("./src_center_minent_20.pkl").to(device)
-
-        # tgt_center = calculate_tgt_center(target_loader, device, model, cfg.NUM_CLASSES, src_center, cfg)
-        # torch.save(tgt_center, "./tgt_center_minent_20.pkl")
-        tgt_center = torch.load("./tgt_center_minent_20.pkl").to(device)
-
-        # Hybrid memory 存储源域的原型（需要每次迭代更新）和目标域的聚类后的原型，聚类时根据判别标准进行选择
-        src_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,
-                                  temp=cfg.TRAIN.contra_temp, momentum=cfg.TRAIN.contra_momentum).to(device)
-        tgt_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,
-                                  temp=cfg.TRAIN.contra_temp, momentum=cfg.TRAIN.contra_momentum).to(device)
-
-        src_memory.features = src_center
-        tgt_memory.features = tgt_center
-
     # UDA TRAINING
-    train_domain_adaptation(model, source_loader, target_loader, cfg, src_memory, tgt_memory, batch_style)
+    train_domain_adaptation(model, source_loader, target_loader, cfg)
 
 
 def calculate_src_center(source_all_dataloader, device, network):
