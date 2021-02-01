@@ -285,7 +285,7 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
         loss_target_entp_aux = entropy_loss(pred_prob_trg_aux)
         loss_target_entp_main = entropy_loss(pred_prob_trg_main)
         loss += (cfg.TRAIN.LAMBDA_ENT_AUX * loss_target_entp_aux
-                + cfg.TRAIN.LAMBDA_ENT_MAIN * loss_target_entp_main)
+                 + cfg.TRAIN.LAMBDA_ENT_MAIN * loss_target_entp_main)
 
         # contrastive loss
         tgt_label = F.interpolate(tgt_label.float().unsqueeze(1), f_out_t.size()[2:],
@@ -308,12 +308,16 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
         loss_t = tgt_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
                             t_labels.flatten().long(), torch.arange(19), t_center)
 
-        loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s \
-                + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
+        loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
 
         loss.backward()
         optimizer.step()
+        # 统计使用的标签中正确的部分
         t_labels = t_labels.flatten()
+        a, b = t_labels[:-1:300], tgt_label[:-1:300].squeeze(1)
+        a = a[b != -1]
+        b = b[b != -1]
+        current_pseudo_acc = 100 * (a == b).sum() / len(b)
         pseudo_acc = 100 * (t_labels[:-1:300] == (tgt_label[:-1:300].squeeze(1))).sum() / len(tgt_label[:-1:300])
 
         current_losses = {'loss_seg_src_aux': loss_seg_src_aux,
@@ -322,7 +326,8 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
                           'loss_ent_main': loss_target_entp_main,
                           'loss_contra_src': loss_s,
                           'loss_contra_tgt': loss_t,
-                          'pseudo_acc': pseudo_acc}
+                          'pseudo_acc': pseudo_acc,
+                          'current_pseudo_acc': current_pseudo_acc}
 
         if i_iter % cfg.TRAIN.SAVE_PRED_EVERY == 0 and i_iter != 0:
             print('taking snapshot ...')
