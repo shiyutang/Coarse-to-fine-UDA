@@ -50,6 +50,8 @@ def main(config_file, exp_suffix):
     if cfg.TRAIN.TENSORBOARD_LOGDIR == '':
         cfg.TRAIN.TENSORBOARD_LOGDIR = osp.join(cfg.EXP_ROOT_LOGS, 'tensorboard', cfg.EXP_NAME)
         os.makedirs(cfg.TRAIN.TENSORBOARD_LOGDIR, exist_ok=True)
+    device = cfg.GPU_ID
+
 
     print('Using config:')
     pprint.pprint(cfg)
@@ -61,7 +63,7 @@ def main(config_file, exp_suffix):
     for i in range(n_models):
         if cfg.TEST.MODEL[i] == 'DeepLabv2':
             model = get_deeplab_v2(num_classes=cfg.NUM_CLASSES,
-                                   multi_level=cfg.TEST.MULTI_LEVEL[i])
+                                   multi_level=cfg.TEST.MULTI_LEVEL[i]).to(device)
         else:
             raise NotImplementedError(f"Not yet supported {cfg.TEST.MODEL[i]}")
         models.append(model)

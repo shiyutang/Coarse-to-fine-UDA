@@ -22,6 +22,7 @@ from sklearn import manifold
 from torch.utils import data
 from tqdm import tqdm
 
+from advent.dataset.flatfolder import FlatFolderDataset
 from advent.model.deeplabv2 import get_deeplab_v2
 from advent.dataset.gta5 import GTA5DataSet
 from advent.dataset.cityscapes import CityscapesDataSet
@@ -70,7 +71,7 @@ def main():
     if cfg.TRAIN.SNAPSHOT_DIR == '':
         cfg.TRAIN.SNAPSHOT_DIR = osp.join(cfg.EXP_ROOT_SNAPSHOT, cfg.EXP_NAME)
         os.makedirs(cfg.TRAIN.SNAPSHOT_DIR, exist_ok=True)
-    shutil.copytree("../../advent/", osp.join(cfg.TRAIN.SNAPSHOT_DIR, "advent"))
+    shutil.copytree("../../advent/", osp.join(cfg.TRAIN.SNAPSHOT_DIR, "advent"), dirs_exist_ok=True)
     device = cfg.GPU_ID
 
     # tensorboard
@@ -146,6 +147,19 @@ def main():
                                     pin_memory=True,
                                     worker_init_fn=_init_fn)
 
+    if cfg.TRAIN.switchAdain:
+        style_dataset = FlatFolderDataset(root=cfg.DATA_DIRECTORY_STYLE,
+                                          base_size=cfg.TRAIN.INPUT_SIZE_STYLE,
+                                          mean=cfg.TRAIN.IMG_MEAN_style)
+        style_dataloader = iter(data.DataLoader(style_dataset,
+                                                batch_size=cfg.TRAIN.BATCH_SIZE_STYLE,
+                                                shuffle=False,
+                                                num_workers=0,
+                                                pin_memory=True,
+                                                drop_last=True))
+
+        batch_style = next(style_dataloader)
+
     with open(osp.join(cfg.TRAIN.SNAPSHOT_DIR, 'train_cfg.yml'), 'w') as yaml_file:
         yaml.dump(cfg, yaml_file, default_flow_style=False)
 
@@ -169,7 +183,7 @@ def main():
         tgt_memory.features = tgt_center
 
     # UDA TRAINING
-    train_domain_adaptation(model, source_loader, target_loader, cfg, src_memory, tgt_memory)
+    train_domain_adaptation(model, source_loader, target_loader, cfg, src_memory, tgt_memory, batch_style)
 
 
 def calculate_src_center(source_all_dataloader, device, network):
@@ -180,7 +194,7 @@ def calculate_src_center(source_all_dataloader, device, network):
             # 获得经过 decoder 没有分类的特征
             class_base, class_high, feat_src = network(source_img)  # 4, 256, 160, 320
             source_label = F.interpolate(source_label.unsqueeze(1), feat_src.size()[2:], mode="nearest") \
-            # 每一个特征根据当前方位的标签，归入到某个类别，并根据个数求平均 label (4, 256, 160, 320)，每个batch累计到最后平均
+                # 每一个特征根据当前方位的标签，归入到某个类别，并根据个数求平均 label (4, 256, 160, 320)，每个batch累计到最后平均
             class_high = F.interpolate(class_high, feat_src.size()[2:], mode="nearest")
 
             source_label_one = process_label(device, source_label.to(device))
@@ -302,7 +316,7 @@ def process_label(device, label):
     pred1 = torch.zeros(batch, 20, w, h).to(device)
     # Return a tensor of elements selected from either :attr`x` or :attr:`y`,
     # depending on :attr:`condition
-    label_trunk = torch.where(label<19, label, torch.Tensor([19]).to(device))
+    label_trunk = torch.where(label < 19, label, torch.Tensor([19]).to(device))
     #  place 1 on label place (replace figure > 19 with 19)
     pred1 = pred1.scatter_(1, label_trunk.long(), 1)
     return pred1

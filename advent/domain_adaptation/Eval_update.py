@@ -156,8 +156,7 @@ def eval_best(cfg, models, device, test_loader, source_loader, interp, fixed_tes
                 PA, MPA, MIoU, FWIoU = val_info(eval, "target")
                 logger.info('\tCurrent target PA: {}, MPA: {}, MIoU: {}, FWIoU: {},'.format(PA, MPA, MIoU, FWIoU))
 
-
-        # validate_source
+            # validate_source
             eval.reset()
             source_iter = iter(source_loader)
             for _ in tqdm(range(500)):
@@ -199,7 +198,8 @@ def eval_best(cfg, models, device, test_loader, source_loader, interp, fixed_tes
                     return PA, MPA, MIoU, FWIoU
 
                 PA_src, MPA_src, MIoU_src, FWIoU_src = val_info(eval, "source")
-                logger.info('\tCurrent source PA: {}, MPA: {}, MIoU: {}, FWIoU: {},'.format(PA_src, MPA_src, MIoU_src, FWIoU_src))
+                logger.info('\tCurrent source PA: {}, MPA: {}, MIoU: {}, FWIoU: {},'.format(PA_src, MPA_src, MIoU_src,
+                                                                                            FWIoU_src))
 
             inters_over_union_classes = per_class_iu(hist)
             all_res[i_iter] = inters_over_union_classes

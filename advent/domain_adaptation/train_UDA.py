@@ -21,6 +21,7 @@ from torch import nn
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
+from advent.model.decoder import decoder
 from advent.model.discriminator import get_fc_discriminator
 from advent.utils.func import adjust_learning_rate, adjust_learning_rate_discriminator
 from advent.utils.func import loss_calc, bce_loss
@@ -30,8 +31,8 @@ from advent.utils.viz_segmask import colorize_mask
 
 
 def train_advent(model, trainloader, targetloader, cfg):
-    ''' UDA training with advent
-    '''
+    """ UDA training with advent
+    """
     # Create the model and start the training.
     input_size_source = cfg.TRAIN.INPUT_SIZE_SOURCE
     input_size_target = cfg.TRAIN.INPUT_SIZE_TARGET
@@ -217,7 +218,7 @@ def draw_in_tensorboard(writer, images, i_iter, pred_main, num_classes, type_):
     writer.add_image(f'Entropy - {type_}', grid_image, i_iter)
 
 
-def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
+def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, batch_style):
     """ UDA training with minEnt
     """
     # Create the model and start the training.
@@ -241,6 +242,8 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
                           lr=cfg.TRAIN.LEARNING_RATE,
                           momentum=cfg.TRAIN.MOMENTUM,
                           weight_decay=cfg.TRAIN.WEIGHT_DECAY)
+
+    decoder.load_state_dict(torch.load(cfg.TRAIN.RESTORE_FROM_decoder))
 
     # interpolate output segmaps
     interp = nn.Upsample(size=(input_size_source[1], input_size_source[0]), mode='bilinear',
@@ -285,7 +288,11 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
         loss_target_entp_aux = entropy_loss(pred_prob_trg_aux)
         loss_target_entp_main = entropy_loss(pred_prob_trg_main)
         loss += (cfg.TRAIN.LAMBDA_ENT_AUX * loss_target_entp_aux
-                + cfg.TRAIN.LAMBDA_ENT_MAIN * loss_target_entp_main)
+                 + cfg.TRAIN.LAMBDA_ENT_MAIN * loss_target_entp_main)
+
+        if cfg.TRAIN.switchAdain:
+            f_out_s = adain(model, batch_style, device, f_out_s, cfg, decoder)
+            f_out_t = adain(model, batch_style, device, f_out_s, cfg, decoder)
 
         # contrastive loss
         tgt_label = F.interpolate(tgt_label.float().unsqueeze(1), f_out_t.size()[2:],
@@ -301,20 +308,24 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
         s_center = calculate_average(f_out_s, src_label, device)
         src_label[src_label == 255] = -1
 
-        # print(s_center.shape, f_out_s.shape)  # [19, 2048] [1, 2048, 91, 161]
+        # print("i,s", images_source.shape, f_out_s.shape)  # [19, 2048] [1, 2048, 81, 161]
         # print(src_label.shape, src_label.min(), src_label.max()) 1, 1, 65, 129
         loss_s = src_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
                             src_label.flatten().long(), torch.arange(19), s_center)
         loss_t = tgt_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
                             t_labels.flatten().long(), torch.arange(19), t_center)
 
-        loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s \
-                + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
+        loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
 
         loss.backward()
         optimizer.step()
+        # 统计使用的标签中正确的部分
         t_labels = t_labels.flatten()
-        pseudo_acc = 100 * (t_labels[:-1:300] == (tgt_label[:-1:300].squeeze(1))).sum() / len(tgt_label[:-1:300])
+        a, b = t_labels[:-1:300], tgt_label[:-1:300].squeeze(1)
+        a = a[b != -1]
+        b = b[b != -1]
+        pseudo_acc = 100 * (a == b).sum() / len(b)
+        prev_pseudo_acc = 100 * (t_labels[:-1:300] == (tgt_label[:-1:300].squeeze(1))).sum() / len(tgt_label[:-1:300])
 
         current_losses = {'loss_seg_src_aux': loss_seg_src_aux,
                           'loss_seg_src_main': loss_seg_src_main,
@@ -322,7 +333,8 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
                           'loss_ent_main': loss_target_entp_main,
                           'loss_contra_src': loss_s,
                           'loss_contra_tgt': loss_t,
-                          'pseudo_acc': pseudo_acc}
+                          'pseudo_acc': pseudo_acc,
+                          'prev_pseudo_acc': prev_pseudo_acc}
 
         if i_iter % cfg.TRAIN.SAVE_PRED_EVERY == 0 and i_iter != 0:
             print('taking snapshot ...')
@@ -340,8 +352,53 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
             if i_iter % cfg.TRAIN.TENSORBOARD_VIZRATE == cfg.TRAIN.TENSORBOARD_VIZRATE - 1:
                 draw_in_tensorboard(writer, images, i_iter, pred_trg_main, num_classes, 'T')
                 draw_in_tensorboard(writer, images_source, i_iter, pred_src_main, num_classes, 'S')
+                # if cfg.TRAIN.switchAdain and i_iter % 2000 == 0:
+                #     writer.add_image(str(i_iter//2000) + '/images_source', images_source, i_iter//2000)
+                #     writer.add_image(str(i_iter//2000) + '/images_source_transfer', pic_s, i_iter//2000)
+                #     writer.add_image(str(i_iter//2000) + '/Images', images, i_iter//2000)
+                #     writer.add_image(str(i_iter//2000) + '/Images_transfer', pic_t, i_iter//2000)
             if i_iter % cfg.TRAIN.print_lossrate == cfg.TRAIN.print_lossrate - 1:
                 print_losses(current_losses, i_iter)
+
+
+def adain(model, batch_style, device, content_feat, cfg, decoder_model):
+    with torch.no_grad():
+        _, _, style_feat = model(batch_style.permute(0, 1, 3, 2).to(device))
+        # print("b,s", batch_style.shape, style_feat.shape)
+        content_feat = content_feat.expand_as(style_feat)
+        t = adaptive_instance_normalization(content_feat, style_feat)
+
+        _, C, H, W = content_feat.size()
+        feat = torch.FloatTensor(1, C, H, W).zero_().to(device)
+        for i, w in enumerate(cfg.TRAIN.interpolation_weights):  # 四个style根据比例合并
+            feat = feat + w * t[i:i + 1]
+        content_f = content_feat[0:1]  # 内容特征每一层都是一样的，因此取一层即可
+        feat = cfg.TRAIN.alpha * feat + (1 - cfg.TRAIN.alpha) * content_f
+
+        # pic = decoder_model(feat)
+    return feat#, pic
+
+
+def calc_mean_std(feat, eps=1e-5):
+    # eps is a small value added to the variance to avoid divide-by-zero.
+    size = feat.size()
+    assert (len(size) == 4)
+    N, C = size[:2]
+    feat_var = feat.view(N, C, -1).var(dim=2) + eps
+    feat_std = feat_var.sqrt().view(N, C, 1, 1)
+    feat_mean = feat.view(N, C, -1).mean(dim=2).view(N, C, 1, 1)
+    return feat_mean, feat_std
+
+
+def adaptive_instance_normalization(content_feat, style_feat):
+    assert (content_feat.size()[:2] == style_feat.size()[:2]), "style size is {}, whereas contens size is {}".format(style_feat.size(), content_feat.size())
+    size = content_feat.size()
+    style_mean, style_std = calc_mean_std(style_feat)
+    content_mean, content_std = calc_mean_std(content_feat)
+
+    normalized_feat = (content_feat - content_mean.expand(
+        size)) / content_std.expand(size)
+    return normalized_feat * style_std.expand(size) + style_mean.expand(size)
 
 
 def calculate_average(features, label, device):  # 4,256, 160,320;  4,1, 160,320
@@ -429,9 +486,9 @@ def to_numpy(tensor):
         return tensor.data.cpu().numpy()
 
 
-def train_domain_adaptation(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
+def train_domain_adaptation(model, trainloader, targetloader, cfg, src_memory, tgt_memory, batch_style):
     if cfg.TRAIN.DA_METHOD == 'MinEnt':
-        train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory)
+        train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory, batch_style)
     elif cfg.TRAIN.DA_METHOD == 'AdvEnt':
         train_advent(model, trainloader, targetloader, cfg)
     else:

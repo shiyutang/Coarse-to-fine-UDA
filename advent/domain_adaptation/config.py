@@ -18,7 +18,7 @@ from advent.utils.serialization import yaml_load
 cfg = EasyDict()
 
 # COMMON CONFIGS
-cfg.name = '0123_addcontra_clossw0.001_0.07temp_0.05thresh_0.99momentum'
+cfg.name = '0128_addcontra_clossw0.001_0.07temp_0.05thresh_0.99momentum_addadain'
 # source domain
 cfg.SOURCE = 'GTA'
 # target domain
@@ -31,6 +31,7 @@ cfg.DATA_LIST_TARGET = str(project_root / 'advent/dataset/cityscapes_list/{}.txt
 # Directories
 cfg.DATA_DIRECTORY_SOURCE = str(project_root / '../CSUDA/data/GTA5')
 cfg.DATA_DIRECTORY_TARGET = str(project_root / '../CSUDA/data/Cityscapes')
+cfg.DATA_DIRECTORY_STYLE = str(project_root / '../CSUDA/data/ambulance')
 # Number of object classes
 cfg.NUM_CLASSES = 19
 # Exp dirs
@@ -47,9 +48,11 @@ cfg.TRAIN.SET_SOURCE = 'all'
 cfg.TRAIN.SET_TARGET = 'train'
 cfg.TRAIN.BATCH_SIZE_SOURCE = 1
 cfg.TRAIN.BATCH_SIZE_TARGET = 1
+cfg.TRAIN.BATCH_SIZE_STYLE = 4
 cfg.TRAIN.IGNORE_LABEL = 255
 cfg.TRAIN.INPUT_SIZE_SOURCE = (1280, 640)
-cfg.TRAIN.INPUT_SIZE_TARGET = (1024, 512)
+cfg.TRAIN.INPUT_SIZE_TARGET = (1280, 640)
+cfg.TRAIN.INPUT_SIZE_STYLE = (1280, 640)
 # Class info
 cfg.TRAIN.INFO_SOURCE = ''
 cfg.TRAIN.INFO_TARGET = str(project_root / 'advent/dataset/cityscapes_list/info.json')
@@ -58,6 +61,7 @@ cfg.TRAIN.MODEL = 'DeepLabv2'
 cfg.TRAIN.MULTI_LEVEL = True
 cfg.TRAIN.RESTORE_FROM = ''
 cfg.TRAIN.IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
+cfg.TRAIN.IMG_MEAN_style = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.uint8)
 cfg.TRAIN.LEARNING_RATE = 2.5e-4
 cfg.TRAIN.MOMENTUM = 0.9
 cfg.TRAIN.WEIGHT_DECAY = 0.0005
@@ -76,15 +80,20 @@ cfg.TRAIN.LAMBDA_ENT_AUX = 0.0002
 # contrastive parameters
 cfg.TRAIN.switchcontra = True
 cfg.TRAIN.contra_temp = 0.07
-cfg.TRAIN.contra_momentum = 0.99
+cfg.TRAIN.contra_momentum = 0.9
 cfg.TRAIN.LAMBDA_CONTRA_S = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_T = 0.001
 # cluster parameters
 cfg.TRAIN.cluster_threshold = 0.05
 cfg.TRAIN.ignore_instances = True
+# adain parameters
+cfg.TRAIN.switchAdain = True
+cfg.TRAIN.RESTORE_FROM_decoder = '../../pretrained_models/decoder.pth'
+cfg.TRAIN.alpha = 1
+cfg.TRAIN.interpolation_weights = [1/4, 1/4, 1/4, 1/4]
 # Other params
 cfg.TRAIN.MAX_ITERS = 250000
-cfg.TRAIN.EARLY_STOP = 240100
+cfg.TRAIN.EARLY_STOP = 120000
 cfg.TRAIN.SAVE_PRED_EVERY = 2000
 cfg.TRAIN.SNAPSHOT_DIR = ''
 cfg.TRAIN.RANDOM_SEED = 1234
@@ -103,7 +112,7 @@ cfg.TEST.IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=n
 cfg.TEST.RESTORE_FROM = ('',)
 cfg.TEST.SNAPSHOT_DIR = ('',)  # used in 'best' mode
 cfg.TEST.SNAPSHOT_STEP = 2000  # used in 'best' mode
-cfg.TEST.SNAPSHOT_MAXITER = 120000  # used in 'best' mode
+cfg.TEST.SNAPSHOT_MAXITER = 250000  # used in 'best' mode
 # Test sets
 cfg.TEST.SET_TARGET = 'val'
 cfg.TEST.BATCH_SIZE_TARGET = 1
