@@ -22,7 +22,7 @@ from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from advent.model.discriminator import get_fc_discriminator
-from advent.utils.func import adjust_learning_rate, adjust_learning_rate_discriminator
+from advent.utils.func import adjust_learning_rate, adjust_learning_rate_discriminator, adjust_threshold
 from advent.utils.func import loss_calc, bce_loss
 from advent.utils.loss import entropy_loss
 from advent.utils.func import prob_2_entropy
@@ -292,7 +292,8 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
                                   mode="nearest").int().view(-1, 1).to(device)  # 4,1, 160,320
         # t_labels_prob = torch.argmax(F.interpolate(f_out_t_class.data, f_out_t.size()[2:], mode="nearest"),
         #                         dim=1).flatten() + 19
-        t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg).to(device)
+        threshold = adjust_threshold(cfg, i_iter)
+        t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg, threshold).to(device)
         t_center = calculate_average(f_out_t, t_labels, device)
         t_labels[t_labels == 255] = -1
         tgt_label[tgt_label == 255] = -1
@@ -370,7 +371,7 @@ def calculate_average(features, label, device):  # 4,256, 160,320;  4,1, 160,320
     return tgt_center_pL
 
 
-def get_pseudo_labels(src_center, tgt_features, num_classes, device, config):  # 4,256,160,320 -> H,256
+def get_pseudo_labels(src_center, tgt_features, num_classes, device, config, threshold):  # 4,256,160,320 -> H,256
     distance = torch.zeros((tgt_features.size(0), num_classes,
                             tgt_features.size(2), tgt_features.size(3))).to(device)  # 4, 19, 160, 320
     # src_center 19, 256
@@ -388,7 +389,7 @@ def get_pseudo_labels(src_center, tgt_features, num_classes, device, config):  #
     # if config["clusters"]["seperate"]:
     #     dis_min_idx += 19
 
-    instmask = abs(dis_min - dis_sec_min) < config.TRAIN.cluster_threshold
+    instmask = abs(dis_min - dis_sec_min) < threshold
     if config.TRAIN.ignore_instances:
         dis_min_idx[instmask] = 255
     else:

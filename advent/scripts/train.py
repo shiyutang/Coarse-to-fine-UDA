@@ -70,7 +70,7 @@ def main():
     if cfg.TRAIN.SNAPSHOT_DIR == '':
         cfg.TRAIN.SNAPSHOT_DIR = osp.join(cfg.EXP_ROOT_SNAPSHOT, cfg.EXP_NAME)
         os.makedirs(cfg.TRAIN.SNAPSHOT_DIR, exist_ok=True)
-    shutil.copytree("../../advent/", osp.join(cfg.TRAIN.SNAPSHOT_DIR, "advent"))
+    shutil.copytree("../../advent/", osp.join(cfg.TRAIN.SNAPSHOT_DIR, "advent"), dirs_exist_ok=True)
     device = cfg.GPU_ID
 
     # tensorboard
@@ -152,11 +152,11 @@ def main():
     if cfg.TRAIN.switchcontra:
         # initialize HybridMemory
         # src_center = calculate_src_center(source_loader, device, model)
-        # torch.save(src_center, "./src_center_minent_20.pkl")
+        # torch.save(src_center, "./src_center_minent_all.pkl")
         src_center = torch.load("./src_center_minent_20.pkl").to(device)
 
         # tgt_center = calculate_tgt_center(target_loader, device, model, cfg.NUM_CLASSES, src_center, cfg)
-        # torch.save(tgt_center, "./tgt_center_minent_20.pkl")
+        # torch.save(tgt_center, "./tgt_center_minent_all.pkl")
         tgt_center = torch.load("./tgt_center_minent_20.pkl").to(device)
 
         # Hybrid memory 存储源域的原型（需要每次迭代更新）和目标域的聚类后的原型，聚类时根据判别标准进行选择

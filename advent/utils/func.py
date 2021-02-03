@@ -28,6 +28,10 @@ def lr_poly(base_lr, iter, max_iter, power):
     return base_lr * ((1 - float(iter) / max_iter) ** power)
 
 
+def adjust_threshold(config, iters):
+    return lr_poly(config.TRAIN.cluster_threshold, iters, config.TRAIN.MAX_ITERS, config.TRAIN.POWER)
+
+
 def _adjust_learning_rate(optimizer, i_iter, cfg, learning_rate):
     lr = lr_poly(learning_rate, i_iter, cfg.TRAIN.MAX_ITERS, cfg.TRAIN.POWER)
     optimizer.param_groups[0]['lr'] = lr
