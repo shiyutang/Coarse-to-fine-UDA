@@ -151,13 +151,13 @@ def main():
 
     if cfg.TRAIN.switchcontra:
         # initialize HybridMemory
-        # src_center = calculate_src_center(source_loader, device, model)
-        # torch.save(src_center, "./src_center_minent_all.pkl")
-        src_center = torch.load("./src_center_minent_20.pkl").to(device)
+        src_center = calculate_src_center(source_loader, device, model)
+        torch.save(src_center, "./src_center_minent_all.pkl")
+        # src_center = torch.load("./src_center_minent_20.pkl").to(device)
 
-        # tgt_center = calculate_tgt_center(target_loader, device, model, cfg.NUM_CLASSES, src_center, cfg)
-        # torch.save(tgt_center, "./tgt_center_minent_all.pkl")
-        tgt_center = torch.load("./tgt_center_minent_20.pkl").to(device)
+        tgt_center = calculate_tgt_center(target_loader, device, model, cfg.NUM_CLASSES, src_center, cfg)
+        torch.save(tgt_center, "./tgt_center_minent_all.pkl")
+        # tgt_center = torch.load("./tgt_center_minent_20.pkl").to(device)
 
         # Hybrid memory 存储源域的原型（需要每次迭代更新）和目标域的聚类后的原型，聚类时根据判别标准进行选择
         src_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,
@@ -197,8 +197,8 @@ def calculate_src_center(source_all_dataloader, device, network):
                     # average pool 除以特征图大小求平均，每个类都一样，因此需要除以权重因子
                     feat_dict[t].append(s.unsqueeze(0).squeeze(2).squeeze(2))
 
-            if i == 300:
-                break
+            # if i == 300:
+            #     break
 
         src_center = [torch.cat(feat_dict[cls], 0).mean(0, True) for cls in sorted(feat_dict.keys())]  # (19, 256)
         src_center = torch.cat(src_center, 0)
@@ -252,8 +252,8 @@ def calculate_tgt_center(target_train_dataloader, device, network, num_classes, 
                     # average pool 除以特征图大小求平均，每个类都一样，因此需要除以权重因子
                     feat_dict[t].append(s.unsqueeze(0).squeeze(2).squeeze(2))
 
-            if i == 300:
-                break
+            # if i == 300:
+            #     break
 
         tgt_center = [torch.cat(feat_dict[cls], 0).mean(0, keepdim=True) for cls in sorted(feat_dict.keys())]
         tgt_center = F.normalize(torch.cat(tgt_center, dim=0), dim=1)

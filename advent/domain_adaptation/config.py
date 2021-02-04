@@ -18,7 +18,7 @@ from advent.utils.serialization import yaml_load
 cfg = EasyDict()
 
 # COMMON CONFIGS
-cfg.name = '0201_addcontra_clossw0.001_0.07temp_dynamicthresh1_0.99momentum'
+cfg.name = '0201_addcontra_clossw0.001_0.07temp_0.99momentum_updatecenter'
 # source domain
 cfg.SOURCE = 'GTA'
 # target domain
@@ -62,7 +62,6 @@ cfg.TRAIN.LEARNING_RATE = 2.5e-4
 cfg.TRAIN.MOMENTUM = 0.9
 cfg.TRAIN.WEIGHT_DECAY = 0.0005
 cfg.TRAIN.POWER = 0.9
-cfg.TRAIN.threshPOWER = 4
 cfg.TRAIN.LAMBDA_SEG_MAIN = 1.0
 cfg.TRAIN.LAMBDA_SEG_AUX = 0.1  # weight of conv4 prediction. Used in multi-level setting.
 # Domain adaptation
@@ -81,7 +80,9 @@ cfg.TRAIN.contra_momentum = 0.99
 cfg.TRAIN.LAMBDA_CONTRA_S = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_T = 0.001
 # cluster parameters
-cfg.TRAIN.cluster_threshold = 1
+cfg.TRAIN.adjthresholdpoly = False
+cfg.TRAIN.threshPOWER = 4
+cfg.TRAIN.cluster_threshold = 0.05
 cfg.TRAIN.ignore_instances = True
 # Other params
 cfg.TRAIN.MAX_ITERS = 250000
