@@ -22,6 +22,7 @@ from sklearn import manifold
 from torch.utils import data
 from tqdm import tqdm
 
+from advent.dataset.flatfolder import FlatFolderDataset
 from advent.dataset.synthia import SYNTHIADataSet
 from advent.model.deeplabv2 import get_deeplab_v2
 from advent.dataset.gta5 import GTA5DataSet

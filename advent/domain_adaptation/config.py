@@ -33,6 +33,7 @@ cfg.DATA_LIST_SOURCE_SYNTHIA = str(project_root / 'advent/dataset/synthia_list/{
 cfg.DATA_DIRECTORY_SOURCE = str(project_root / '../CSUDA/data/GTA5')
 cfg.DATA_DIRECTORY_TARGET = str(project_root / '../CSUDA/data/Cityscapes')
 cfg.DATA_DIRECTORY_SOURCE_SYNTHIA = str(project_root / '../CSUDA/data/Synthia')
+cfg.DATA_DIRECTORY_STYLE = str(project_root / '../CSUDA/data/ambulance')
 # Number of object classes
 cfg.NUM_CLASSES = 19
 # Exp dirs
@@ -50,8 +51,11 @@ cfg.TRAIN.SET_SOURCE_SYNTHIA = 'train'
 cfg.TRAIN.SET_TARGET = 'train'
 cfg.TRAIN.BATCH_SIZE_SOURCE = 1
 cfg.TRAIN.BATCH_SIZE_TARGET = 1
+cfg.TRAIN.BATCH_SIZE_STYLE = 4
 cfg.TRAIN.IGNORE_LABEL = 255
 cfg.TRAIN.INPUT_SIZE_SOURCE = (1280, 640)
+cfg.TRAIN.INPUT_SIZE_TARGET = (1280, 640)
+cfg.TRAIN.INPUT_SIZE_STYLE = (1280, 640)
 cfg.TRAIN.INPUT_SIZE_TARGET = (1280, 640)
 # Class info
 cfg.TRAIN.INFO_SOURCE = ''
@@ -61,6 +65,7 @@ cfg.TRAIN.MODEL = 'DeepLabv2'
 cfg.TRAIN.MULTI_LEVEL = True
 cfg.TRAIN.RESTORE_FROM = ''
 cfg.TRAIN.IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
+cfg.TRAIN.IMG_MEAN_style = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.uint8)
 cfg.TRAIN.LEARNING_RATE = 2.5e-4
 cfg.TRAIN.MOMENTUM = 0.9
 cfg.TRAIN.WEIGHT_DECAY = 0.0005
@@ -89,6 +94,11 @@ cfg.TRAIN.adjthresholdpoly = False
 cfg.TRAIN.threshPOWER = 4
 cfg.TRAIN.cluster_threshold = 0.05
 cfg.TRAIN.ignore_instances = True
+# adain parameters
+cfg.TRAIN.switchAdain = True
+cfg.TRAIN.RESTORE_FROM_decoder = '../../pretrained_models/decoder.pth'
+cfg.TRAIN.alpha = 1
+cfg.TRAIN.interpolation_weights = [1/4, 1/4, 1/4, 1/4]
 # Other params
 cfg.TRAIN.MAX_ITERS = 250000
 cfg.TRAIN.EARLY_STOP = 120000

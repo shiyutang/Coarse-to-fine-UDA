@@ -36,6 +36,6 @@ class CityscapesDataSet(BaseDataset):
         img_file, label_file, name = self.files[index]
         label = self.get_labels(label_file)
         label = self.map_labels(label).copy()
-        image = self.get_image(img_file)
-        image = self.preprocess(image)
+        image = self.get_image(img_file)   # np array
+        image = self.preprocess(image)   # np array
         return image.copy(), label, np.array(image.shape), name
