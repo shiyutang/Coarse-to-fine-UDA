@@ -35,16 +35,17 @@ def hm(inputs, indexes, average_center, features, momentum=0.5):
 
 
 class HybridMemory(nn.Module):
-    def __init__(self, num_features, num_samples, temp=0.05, momentum=0.2):
+    def __init__(self, num_features, num_samples, temp=0.05, momentum=0.2, device="cuda:0"):
         super(HybridMemory, self).__init__()
         self.num_features = num_features
         self.num_samples = num_samples
 
         self.momentum = momentum
         self.temp = temp
+        self.device = device
 
         self.register_buffer('features', torch.zeros(num_samples, dtype=torch.float16))  # 特征是（样本数，样本特征长度）
-        self.register_buffer('labels', torch.arange(num_samples).cuda().long())
+        self.register_buffer('labels', torch.arange(num_samples).to(device).long())
 
     def forward(self, inputs, labels, index, average_center):
         """
@@ -66,12 +67,12 @@ class HybridMemory(nn.Module):
 
         # 独立分开的对比损失、融合的对比损失
 
-        sim = torch.zeros(sumlabels.max() + 1, B).float().cuda()  # 20,  4*160*320
+        sim = torch.zeros(sumlabels.max() + 1, B).float().to(self.device)  # 20,  4*160*320
         # 把第三项的内容依次根据第二项的映射加到 sim 中，MB中一个样本和所有batch样本的内积按照这个样本的标签归类到一起
         sim.index_add_(0, sumlabels, inputs.t().contiguous())  # 2965*160*320, 4*160*320 inputs==sim.t()
 
-        nums = torch.zeros(sumlabels.max() + 1, 1).float().cuda()
-        nums.index_add_(0, sumlabels, torch.ones(self.num_samples, 1).float().cuda())  # MB 中每个label有多少样本
+        nums = torch.zeros(sumlabels.max() + 1, 1).float().to(self.device)
+        nums.index_add_(0, sumlabels, torch.ones(self.num_samples, 1).float().to(self.device))  # MB 中每个label有多少样本
 
         # 同一个label的内积求平均 mean(x*MB_d_{i}) s.t: d_{i} has same label,
         mask = (nums > 0).float()

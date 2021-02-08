@@ -312,7 +312,13 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
         loss_t = tgt_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
                             t_labels.flatten().long(), torch.arange(19), t_center)
 
+        loss_tgt2src = src_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
+                                  t_labels.flatten().long(), torch.arange(19), t_center)
+        loss_src2tgt = tgt_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
+                                  src_label.flatten().long(), torch.arange(19), s_center)
+
         loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
+        loss += cfg.TRAIN.LAMBDA_CONTRA_S2T * loss_src2tgt + cfg.TRAIN.LAMBDA_CONTRA_T2S * loss_tgt2src
 
         loss.backward()
         optimizer.step()

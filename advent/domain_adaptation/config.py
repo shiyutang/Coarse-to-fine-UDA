@@ -18,7 +18,7 @@ from advent.utils.serialization import yaml_load
 cfg = EasyDict()
 
 # COMMON CONFIGS
-cfg.name = '0201_addcontra_clossw0.001_0.07temp_0.99momentum_updatecenter'
+cfg.name = '0206_addcontra_clossw0.001_0.07temp_0.99momentum_src2tgt_tgt2src'
 # source domain
 cfg.SOURCE = 'GTA'
 # target domain
@@ -28,9 +28,11 @@ cfg.NUM_WORKERS = 4
 # List of training images
 cfg.DATA_LIST_SOURCE = str(project_root / 'advent/dataset/gta5_list/{}.txt')
 cfg.DATA_LIST_TARGET = str(project_root / 'advent/dataset/cityscapes_list/{}.txt')
+cfg.DATA_LIST_SOURCE_SYNTHIA = str(project_root / 'advent/dataset/synthia_list/{}.txt')
 # Directories
 cfg.DATA_DIRECTORY_SOURCE = str(project_root / '../CSUDA/data/GTA5')
 cfg.DATA_DIRECTORY_TARGET = str(project_root / '../CSUDA/data/Cityscapes')
+cfg.DATA_DIRECTORY_SOURCE_SYNTHIA = str(project_root / '../CSUDA/data/Synthia')
 # Number of object classes
 cfg.NUM_CLASSES = 19
 # Exp dirs
@@ -44,6 +46,7 @@ cfg.GPU_ID = "cuda:0"
 # TRAIN CONFIGS
 cfg.TRAIN = EasyDict()
 cfg.TRAIN.SET_SOURCE = 'all'
+cfg.TRAIN.SET_SOURCE_SYNTHIA = 'train'
 cfg.TRAIN.SET_TARGET = 'train'
 cfg.TRAIN.BATCH_SIZE_SOURCE = 1
 cfg.TRAIN.BATCH_SIZE_TARGET = 1
@@ -79,6 +82,8 @@ cfg.TRAIN.contra_temp = 0.07
 cfg.TRAIN.contra_momentum = 0.99
 cfg.TRAIN.LAMBDA_CONTRA_S = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_T = 0.001
+cfg.TRAIN.LAMBDA_CONTRA_T2S = 0.001
+cfg.TRAIN.LAMBDA_CONTRA_S2T = 0.001
 # cluster parameters
 cfg.TRAIN.adjthresholdpoly = False
 cfg.TRAIN.threshPOWER = 4
