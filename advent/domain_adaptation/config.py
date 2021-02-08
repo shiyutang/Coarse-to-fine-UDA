@@ -18,9 +18,9 @@ from advent.utils.serialization import yaml_load
 cfg = EasyDict()
 
 # COMMON CONFIGS
-cfg.name = '0206_addcontra_clossw0.001_0.07temp_0.99momentum_src2tgt_tgt2src'
+cfg.name = '0208_ADVENT_SYNTHIA'
 # source domain
-cfg.SOURCE = 'GTA'
+cfg.SOURCE = 'SYNTHIA'
 # target domain
 cfg.TARGET = 'Cityscapes'
 # Number of workers for dataloading
@@ -42,7 +42,7 @@ cfg.EXP_ROOT = project_root / 'experiments'
 cfg.EXP_ROOT_SNAPSHOT = osp.join(cfg.EXP_ROOT, 'snapshots')
 cfg.EXP_ROOT_LOGS = osp.join(cfg.EXP_ROOT, 'logs')
 # CUDA
-cfg.GPU_ID = "cuda:0"
+cfg.GPU_ID = "cuda:2"
 
 # TRAIN CONFIGS
 cfg.TRAIN = EasyDict()
@@ -82,7 +82,7 @@ cfg.TRAIN.LAMBDA_ADV_AUX = 0.0002
 cfg.TRAIN.LAMBDA_ENT_MAIN = 0.001
 cfg.TRAIN.LAMBDA_ENT_AUX = 0.0002
 # contrastive parameters
-cfg.TRAIN.switchcontra = True
+cfg.TRAIN.switchcontra = False
 cfg.TRAIN.contra_temp = 0.07
 cfg.TRAIN.contra_momentum = 0.99
 cfg.TRAIN.LAMBDA_CONTRA_S = 0.001
@@ -95,7 +95,7 @@ cfg.TRAIN.threshPOWER = 4
 cfg.TRAIN.cluster_threshold = 0.05
 cfg.TRAIN.ignore_instances = True
 # adain parameters
-cfg.TRAIN.switchAdain = True
+cfg.TRAIN.switchAdain = False
 cfg.TRAIN.RESTORE_FROM_decoder = '../../pretrained_models/decoder.pth'
 cfg.TRAIN.alpha = 1
 cfg.TRAIN.interpolation_weights = [1/4, 1/4, 1/4, 1/4]

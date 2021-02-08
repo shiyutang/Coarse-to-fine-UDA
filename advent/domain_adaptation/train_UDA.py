@@ -22,6 +22,7 @@ from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from advent.model.discriminator import get_fc_discriminator
+from advent.model.hm import HybridMemory
 from advent.utils.func import adjust_learning_rate, adjust_learning_rate_discriminator, adjust_threshold
 from advent.utils.func import loss_calc, bce_loss
 from advent.utils.loss import entropy_loss
@@ -217,7 +218,7 @@ def draw_in_tensorboard(writer, images, i_iter, pred_main, num_classes, type_):
     writer.add_image(f'Entropy - {type_}', grid_image, i_iter)
 
 
-def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
+def train_minent(model, trainloader, targetloader, cfg):
     """ UDA training with minEnt
     """
     # Create the model and start the training.
@@ -228,6 +229,27 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
     viz_tensorboard = os.path.exists(cfg.TRAIN.TENSORBOARD_LOGDIR)
     if viz_tensorboard:
         writer = SummaryWriter(log_dir=cfg.TRAIN.TENSORBOARD_LOGDIR)
+
+    if cfg.TRAIN.switchcontra:
+        # initialize HybridMemory
+        # src_center = calculate_src_center(trainloader, device, model)
+        # torch.save(src_center, "../../src_center_minent_all.pkl")
+        src_center = torch.load("../../src_center_minent_all.pkl").to(device)
+
+        # tgt_center = calculate_tgt_center(targetloader, device, model, cfg.NUM_CLASSES, src_center, cfg)
+        # torch.save(tgt_center, "../../tgt_center_minent_all.pkl")
+        tgt_center = torch.load("../../tgt_center_minent_all.pkl").to(device)
+
+        # Hybrid memory 存储源域的原型（需要每次迭代更新）和目标域的聚类后的原型，聚类时根据判别标准进行选择
+        src_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,
+                                  temp=cfg.TRAIN.contra_temp, momentum=cfg.TRAIN.contra_momentum, device=device).to(
+            device)
+        tgt_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,
+                                  temp=cfg.TRAIN.contra_temp, momentum=cfg.TRAIN.contra_momentum, device=device).to(
+            device)
+
+        src_memory.features = src_center
+        tgt_memory.features = tgt_center
 
     # SEGMNETATION NETWORK
     model.train()
@@ -288,56 +310,61 @@ def train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
                  + cfg.TRAIN.LAMBDA_ENT_MAIN * loss_target_entp_main)
 
         # contrastive loss
-        tgt_label = F.interpolate(tgt_label.float().unsqueeze(1), f_out_t.size()[2:],
-                                  mode="nearest").int().view(-1, 1).to(device)  # 4,1, 160,320
-        # t_labels_prob = torch.argmax(F.interpolate(f_out_t_class.data, f_out_t.size()[2:], mode="nearest"),
-        #                         dim=1).flatten() + 19
-        if cfg.TRAIN.adjthresholdpoly:
-            threshold = adjust_threshold(cfg, i_iter)
-        else:
-            threshold = cfg.TRAIN.cluster_threshold
-        t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg, threshold).to(device)
-        t_center = calculate_average(f_out_t, t_labels, device)
-        t_labels[t_labels == 255] = -1
-        tgt_label[tgt_label == 255] = -1
+        current_losses = {}
+        if cfg.TRAIN.switchcontra:
+            tgt_label = F.interpolate(tgt_label.float().unsqueeze(1), f_out_t.size()[2:],
+                                      mode="nearest").int().view(-1, 1).to(device)  # 4,1, 160,320
+            # t_labels_prob = torch.argmax(F.interpolate(f_out_t_class.data, f_out_t.size()[2:], mode="nearest"),
+            #                         dim=1).flatten() + 19
+            if cfg.TRAIN.adjthresholdpoly:
+                threshold = adjust_threshold(cfg, i_iter)
+            else:
+                threshold = cfg.TRAIN.cluster_threshold
+            t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg, threshold).to(
+                device)
+            t_center = calculate_average(f_out_t, t_labels, device)
+            t_labels[t_labels == 255] = -1
+            tgt_label[tgt_label == 255] = -1
 
-        src_label = F.interpolate(src_label.float().unsqueeze(1), size=f_out_s.size()[2:], mode="nearest").to(device)
-        s_center = calculate_average(f_out_s, src_label, device)
-        src_label[src_label == 255] = -1
+            src_label = F.interpolate(src_label.float().unsqueeze(1), size=f_out_s.size()[2:], mode="nearest").to(
+                device)
+            s_center = calculate_average(f_out_s, src_label, device)
+            src_label[src_label == 255] = -1
 
-        # print(s_center.shape, f_out_s.shape)  # [19, 2048] [1, 2048, 91, 161]
-        # print(src_label.shape, src_label.min(), src_label.max()) 1, 1, 65, 129
-        loss_s = src_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
-                            src_label.flatten().long(), torch.arange(19), s_center)
-        loss_t = tgt_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
-                            t_labels.flatten().long(), torch.arange(19), t_center)
+            # print(s_center.shape, f_out_s.shape)  # [19, 2048] [1, 2048, 91, 161]
+            # print(src_label.shape, src_label.min(), src_label.max()) 1, 1, 65, 129
+            loss_s = src_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
+                                src_label.flatten().long(), torch.arange(19), s_center)
+            loss_t = tgt_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
+                                t_labels.flatten().long(), torch.arange(19), t_center)
 
-        loss_tgt2src = src_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
-                                  t_labels.flatten().long(), torch.arange(19), t_center)
-        loss_src2tgt = tgt_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
-                                  src_label.flatten().long(), torch.arange(19), s_center)
+            loss_tgt2src = src_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
+                                      t_labels.flatten().long(), torch.arange(19), t_center)
+            loss_src2tgt = tgt_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
+                                      src_label.flatten().long(), torch.arange(19), s_center)
 
-        loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
-        loss += cfg.TRAIN.LAMBDA_CONTRA_S2T * loss_src2tgt + cfg.TRAIN.LAMBDA_CONTRA_T2S * loss_tgt2src
+            loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
+            loss += cfg.TRAIN.LAMBDA_CONTRA_S2T * loss_src2tgt + cfg.TRAIN.LAMBDA_CONTRA_T2S * loss_tgt2src
+
+            # 统计使用的标签中正确的部分
+            t_labels = t_labels.flatten()
+            a, b = t_labels[:-1:300], tgt_label[:-1:300].squeeze(1)
+            a = a[b != -1]
+            b = b[b != -1]
+            current_pseudo_acc = 100 * (a == b).sum() / len(b)
+            pseudo_acc = 100 * (t_labels[:-1:300] == (tgt_label[:-1:300].squeeze(1))).sum() / len(tgt_label[:-1:300])
+            current_losses = {'loss_contra_src': loss_s,
+                              'loss_contra_tgt': loss_t,
+                              'pseudo_acc': pseudo_acc,
+                              'current_pseudo_acc': current_pseudo_acc}
 
         loss.backward()
         optimizer.step()
-        # 统计使用的标签中正确的部分
-        t_labels = t_labels.flatten()
-        a, b = t_labels[:-1:300], tgt_label[:-1:300].squeeze(1)
-        a = a[b != -1]
-        b = b[b != -1]
-        current_pseudo_acc = 100 * (a == b).sum() / len(b)
-        pseudo_acc = 100 * (t_labels[:-1:300] == (tgt_label[:-1:300].squeeze(1))).sum() / len(tgt_label[:-1:300])
 
-        current_losses = {'loss_seg_src_aux': loss_seg_src_aux,
-                          'loss_seg_src_main': loss_seg_src_main,
-                          'loss_ent_aux': loss_target_entp_aux,
-                          'loss_ent_main': loss_target_entp_main,
-                          'loss_contra_src': loss_s,
-                          'loss_contra_tgt': loss_t,
-                          'pseudo_acc': pseudo_acc,
-                          'current_pseudo_acc': current_pseudo_acc}
+        current_losses.update({'loss_seg_src_aux': loss_seg_src_aux,
+                               'loss_seg_src_main': loss_seg_src_main,
+                               'loss_ent_aux': loss_target_entp_aux,
+                               'loss_ent_main': loss_target_entp_main})
 
         if i_iter % cfg.TRAIN.SAVE_PRED_EVERY == 0 and i_iter != 0:
             print('taking snapshot ...')
@@ -444,10 +471,146 @@ def to_numpy(tensor):
         return tensor.data.cpu().numpy()
 
 
-def train_domain_adaptation(model, trainloader, targetloader, cfg, src_memory, tgt_memory):
+def train_domain_adaptation(model, trainloader, targetloader, cfg):
     if cfg.TRAIN.DA_METHOD == 'MinEnt':
-        train_minent(model, trainloader, targetloader, cfg, src_memory, tgt_memory)
+        train_minent(model, trainloader, targetloader, cfg)
     elif cfg.TRAIN.DA_METHOD == 'AdvEnt':
         train_advent(model, trainloader, targetloader, cfg)
     else:
         raise NotImplementedError(f"Not yet supported DA method {cfg.TRAIN.DA_METHOD}")
+
+
+def calculate_src_center(source_all_dataloader, device, network):
+    feat_dict = collections.defaultdict(list)
+    with torch.no_grad():
+        for i, (source_img, source_label, a, b) in tqdm(enumerate(source_all_dataloader)):
+            source_img = source_img.to(device)
+            # 获得经过 decoder 没有分类的特征
+            class_base, class_high, feat_src = network(source_img)  # 4, 256, 160, 320
+            source_label = F.interpolate(source_label.unsqueeze(1), feat_src.size()[2:], mode="nearest") \
+                # 每一个特征根据当前方位的标签，归入到某个类别，并根据个数求平均 label (4, 256, 160, 320)，每个batch累计到最后平均
+            class_high = F.interpolate(class_high, feat_src.size()[2:], mode="nearest")
+
+            source_label_one = process_label(device, source_label.to(device))
+            pred_label = process_label(device, F.softmax(class_high, dim=1).argmax(dim=1, keepdim=True).float())
+            pred_correct = source_label_one * pred_label
+            scale_factor = F.adaptive_avg_pool2d(pred_correct, output_size=1)
+
+            for n in range(feat_src.size(0)):
+                for t in range(19):
+                    if scale_factor[n][t] == 0 or (pred_correct > 0).sum() < 1:
+                        continue
+                    s = feat_src[n] * pred_correct[n][t]
+                    s = F.adaptive_avg_pool2d(s, output_size=1) / (scale_factor[n][t] + 1e-6)
+                    # average pool 除以特征图大小求平均，每个类都一样，因此需要除以权重因子
+                    feat_dict[t].append(s.unsqueeze(0).squeeze(2).squeeze(2))
+
+            if i == 8000:
+                break
+
+        src_center = [torch.cat(feat_dict[cls], 0).mean(0, True) for cls in sorted(feat_dict.keys())]  # (19, 256)
+        src_center = torch.cat(src_center, 0)
+        src_center = F.normalize(src_center, dim=1)
+        print(feat_dict[1][0].shape)
+        assert src_center.size(0) == 19, "the shape of source center is incorrect {}, {}".format(
+            src_center.size(), feat_dict.keys(), feat_dict[1][0].shape)
+        # normailze will not interfere feature diversity, cause tgt_centers aren't lack
+
+        return src_center
+
+
+def calculate_tgt_center(target_train_dataloader, device, network, num_classes, src_center, config):
+    print("==Extracting target center==")
+    feat_dict = collections.defaultdict(list)
+    with torch.no_grad():
+        for i, (target_img, _, _, _) in tqdm(enumerate(target_train_dataloader)):
+            target_img = target_img.to(device)
+            # 获得经过 decoder 没有分类的特征
+            _, _, output_target = network(target_img)  # 4, 256, 160, 320
+
+            distance = torch.zeros((output_target.size(0), num_classes,
+                                    output_target.size(2), output_target.size(3))).to(
+                device)  # 4, 19, 160, 320
+            # src_center 19, 256
+            for n in range(output_target.size(0)):
+                for t in range(num_classes):
+                    distance[n][t] = torch.norm(
+                        output_target[n] - src_center[t].reshape((src_center[t].size(0), 1, 1)).to(
+                            device),
+                        dim=0)  # 160, 320
+
+            dis_min, dis_min_idx = distance.min(dim=1, keepdim=True)  # 4, 1, 160, 320
+            distance_second = copy.deepcopy(distance)
+            distance_second[distance_second == dis_min.expand_as(distance)] = 1000
+            dis_sec_min, dis_sec_min_idx = distance_second.min(dim=1, keepdim=True)  # 1, nbr_tgt
+
+            instmask = abs(dis_min - dis_sec_min) < config.TRAIN.cluster_threshold
+            if config.TRAIN.ignore_instances:
+                dis_min_idx[instmask] = 255
+
+            pred_label = process_label(device, dis_min_idx.float())
+            scale_factor = F.adaptive_avg_pool2d(pred_label, output_size=1)
+
+            for n in range(pred_label.size(0)):
+                for t in range(num_classes):
+                    if scale_factor[n][t] == 0:
+                        continue
+                    s = output_target[n] * pred_label[n][t]  # 256, 160, 320
+                    s = F.adaptive_avg_pool2d(s, output_size=1) / (scale_factor[n][t] + 1e-6)  # 256, 1, 1
+                    # average pool 除以特征图大小求平均，每个类都一样，因此需要除以权重因子
+                    feat_dict[t].append(s.unsqueeze(0).squeeze(2).squeeze(2))
+
+            if i == 3000:
+                break
+
+        tgt_center = [torch.cat(feat_dict[cls], 0).mean(0, keepdim=True) for cls in sorted(feat_dict.keys())]
+        tgt_center = F.normalize(torch.cat(tgt_center, dim=0), dim=1)
+        assert tgt_center.size(0) == 19, "the shape of tgt_center is incorrect {}, {}".format(
+            tgt_center.size(), feat_dict.keys())
+
+        return tgt_center
+
+
+def tsne(source_all_dataloader, device, network):
+    from matplotlib import pyplot as plt
+
+    with torch.no_grad():
+        for i, (src_img, source_label, _, _) in tqdm(enumerate(source_all_dataloader)):
+            src_img = src_img.to(device)
+            output_source, _ = network(src_img)  # 4, 256, 160, 320
+            source_label = F.interpolate(source_label.unsqueeze(1), (160, 320), mode="bilinear",
+                                         align_corners=False).int()
+
+            tsne = manifold.TSNE(n_components=2, init='pca', random_state=501)
+            X_tsne = tsne.fit_transform(output_source.permute(0, 2, 3, 1).reshape(-1, 2048).cpu().numpy()[0:-1:100])
+            # pickle.dump(X_tsne, open("MAX_batch1_tsne_batch{}.pkl".format(i), "wb"))
+            # X_tsne = pickle.load(open("AE_batch1_tsne.pkl", "rb"))
+
+            '''嵌入空间可视化'''
+            x_min, x_max = X_tsne.min(0), X_tsne.max(0)
+            X_norm = (X_tsne - x_min) / (x_max - x_min)  # 归一化
+            source_label = source_label.reshape(-1, 1).numpy()[0:-1:100]
+            plt.figure()
+            for ii in range(X_norm.shape[0]):
+                if source_label[ii][0] == -1:
+                    continue
+                else:
+                    plt.text(X_norm[ii, 0], X_norm[ii, 1], str(source_label[ii][0]),
+                             color=plt.cm.Set1(source_label[ii][0]),
+                             fontdict={'weight': 'bold', 'size': 6})
+            plt.savefig("MAX_reshape_tsne_batch{}.png".format(i))
+            print("saved MAX_reshape_tsne_batch{}.png".format(i))
+
+
+def process_label(device, label):
+    """
+    :desc: turn the label into one-hot format
+    """
+    batch, channel, w, h = label.size()
+    pred1 = torch.zeros(batch, 20, w, h).to(device)
+    # Return a tensor of elements selected from either :attr`x` or :attr:`y`,
+    # depending on :attr:`condition
+    label_trunk = torch.where(label<19, label, torch.Tensor([19]).to(device))
+    #  place 1 on label place (replace figure > 19 with 19)
+    pred1 = pred1.scatter_(1, label_trunk.long(), 1)
+    return pred1

@@ -15,7 +15,7 @@ class SYNTHIADataSet(BaseDataset):
 
     def get_metadata(self, name):
         img_file = self.root / 'RGB' / name
-        label_file = self.root / 'GT' / name
+        label_file = self.root / 'GT/LABELS' / name
         return img_file, label_file
 
     def __getitem__(self, index):

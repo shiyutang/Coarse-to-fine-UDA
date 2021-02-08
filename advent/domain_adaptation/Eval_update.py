@@ -14,12 +14,9 @@ import numpy as np
 import torch
 from tensorboardX import SummaryWriter
 from torch import nn
-from torch.utils import data
 from tqdm import tqdm
 
 from advent.dataset.cityscapes import DEFAULT_INFO_PATH
-from advent.dataset.flatfolder import FlatFolderDataset
-from advent.domain_adaptation.train_UDA import adain
 from advent.utils.eval import Eval
 from advent.utils.func import per_class_iu, fast_hist
 from advent.utils.serialization import pickle_dump, pickle_load
@@ -93,20 +90,6 @@ def eval_best(cfg, models, device, test_loader, source_loader, interp, fixed_tes
     logger = init_logger(cfg)
     writer = SummaryWriter(log_dir=cfg.TRAIN.TENSORBOARD_LOGDIR)
 
-    if cfg.TRAIN.switchAdain:
-        style_dataset = FlatFolderDataset(root=cfg.DATA_DIRECTORY_STYLE,
-                                          base_size=cfg.TRAIN.INPUT_SIZE_STYLE,
-                                          mean=cfg.TRAIN.IMG_MEAN_style)
-        style_dataloader = iter(data.DataLoader(style_dataset,
-                                                batch_size=cfg.TRAIN.BATCH_SIZE_STYLE,
-                                                shuffle=False,
-                                                num_workers=0,
-                                                pin_memory=True,
-                                                drop_last=True))
-
-        batch_style = next(style_dataloader)
-
-
     for i_iter in range(start_iter, max_iter + 1, step):
         restore_from = osp.join(cfg.TEST.SNAPSHOT_DIR[0], f'model_{i_iter}.pth')
         logger.info("restore_from"+ str(restore_from))
@@ -132,11 +115,6 @@ def eval_best(cfg, models, device, test_loader, source_loader, interp, fixed_tes
                     interp = nn.Upsample(size=(label.shape[1], label.shape[2]), mode='bilinear', align_corners=True)
                 with torch.no_grad():
                     _, pred_main, f_out_t = models[0](image.cuda(device))
-
-                    if cfg.TRAIN.switchAdain:
-                        f_out_t = adain(models[0], batch_style, device, f_out_t, cfg)
-                        pred_main = models[0].layer6(f_out_t)
-
                     output = interp(pred_main).cpu().data[0].numpy()  # 19, 1024, 2048
                     output = output.transpose(1, 2, 0)  # 
                     output = np.argmax(output, axis=2)
@@ -182,11 +160,6 @@ def eval_best(cfg, models, device, test_loader, source_loader, interp, fixed_tes
                 resize = nn.Upsample(size=(label.shape[1], label.shape[2]), mode='bilinear', align_corners=True)
                 with torch.no_grad():
                     _, pred_main, f_out_s = models[0](image.cuda(device))
-
-                    if cfg.TRAIN.switchAdain:
-                        f_out_s = adain(models[0], batch_style, device, f_out_s, cfg)
-                        pred_main = models[0].layer6(f_out_s)
-
                     output = resize(pred_main).cpu().data[0].numpy()  # 19, 2048, 1024
                     output = output.transpose(1, 2, 0)  #
                     output = np.argmax(output, axis=2)
