@@ -314,14 +314,16 @@ def train_minent(model, trainloader, targetloader, cfg):
         if cfg.TRAIN.switchcontra:
             tgt_label = F.interpolate(tgt_label.float().unsqueeze(1), f_out_t.size()[2:],
                                       mode="nearest").int().view(-1, 1).to(device)  # 4,1, 160,320
-            # t_labels_prob = torch.argmax(F.interpolate(f_out_t_class.data, f_out_t.size()[2:], mode="nearest"),
-            #                         dim=1).flatten() + 19
             if cfg.TRAIN.adjthresholdpoly:
                 threshold = adjust_threshold(cfg, i_iter)
             else:
                 threshold = cfg.TRAIN.cluster_threshold
-            t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg, threshold).to(
-                device)
+            if not cfg.TRAIN.pesudolabel_cluster:
+                t_labels = torch.argmax(F.interpolate(pred_trg_main.data, f_out_t.size()[2:], mode="nearest"),
+                                    dim=1).unsqueeze(1).to(device)
+            else:
+                t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg,
+                                             threshold).to(device)
             t_center = calculate_average(f_out_t, t_labels, device)
             t_labels[t_labels == 255] = -1
             tgt_label[tgt_label == 255] = -1

@@ -281,7 +281,7 @@ def style_transfer_AdaIN(content=None, content_dir=None, style=None, style_dir=N
                     interpolation_weights=interpolation_weight)
 
             output_Tensor.cpu()
-            out_name = Path.joinpath(output_dir, str(content_path.stem) + "stylized.{}".format(save_ext))
+            out_name = Path.joinpath(output_dir, str(content_path.stem) + ".{}".format(save_ext))
             save_image(output_Tensor, out_name)
 
         else:
@@ -302,16 +302,16 @@ def style_transfer_AdaIN(content=None, content_dir=None, style=None, style_dir=N
 
 
 if __name__ == '__main__':
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][0:2497]
-    content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][2497:4994]
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][4994:7491]
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][7491:9988]
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][9988:17479]
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][12485:14982]
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][14982:17479]
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][17479:19976]
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][19976:22473]
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][22473:]
+    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][0:]
+    dirs = "/root/tsy/CSUDA/data/Cityscapes/leftImg8bit/train"
+    content_dirs = []
+    with open("../dataset/cityscapes_list/train.txt", 'r') as f:
+        for line in f.readlines():
+            content_dirs.append(Path(dirs).joinpath(line.strip()))
+
+    with open("../dataset/cityscapes_list/val.txt", 'r') as f:
+        for line in f.readlines():
+            content_dirs.append(Path(dirs.replace("train", "val")).joinpath(line.strip()))
 
     style_interpolation_weight = "1,1,1,1"
 

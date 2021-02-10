@@ -118,7 +118,7 @@ def main():
     print('Model loaded from {}'.format(cfg.TRAIN.RESTORE_FROM))
 
     # DATALOADERS
-    if "GTA" == cfg.SOURCE:
+    if "GTA" in cfg.SOURCE:
         source_dataset = GTA5DataSet(root=cfg.DATA_DIRECTORY_SOURCE,
                                      list_path=cfg.DATA_LIST_SOURCE,
                                      set=cfg.TRAIN.SET_SOURCE,
