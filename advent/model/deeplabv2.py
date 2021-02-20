@@ -66,7 +66,7 @@ class ClassifierModule(nn.Module):
 
 
 class ResNetMulti(nn.Module):
-    def __init__(self, block, layers, num_classes, multi_level):
+    def __init__(self, block, layers, num_classes, multi_level, cfg):
         self.multi_level = multi_level
         self.inplanes = 64
         super(ResNetMulti, self).__init__()
@@ -91,6 +91,35 @@ class ResNetMulti(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
         self.num_features = 2048
+
+        #####################
+        self.feat_dim = 2048
+        if cfg.TRAIN.head_mode == 'moco':
+            self.head = nn.Sequential(
+                nn.Linear(self.num_features, self.num_features),
+                nn.ReLU(inplace=True),
+                nn.Linear(self.num_features, self.feat_dim),
+            )
+        elif cfg.TRAIN.head_mode == 'simclr':
+            self.head = nn.Sequential(
+                nn.Linear(self.num_features, self.num_features),
+                nn.BatchNorm1d(self.num_features),
+                nn.ReLU(inplace=True),
+                nn.Linear(self.num_features, self.feat_dim),
+                nn.BatchNorm1d(self.feat_dim),
+            )
+        elif cfg.TRAIN.head_mode == 'byol':
+            self.head = nn.Sequential(
+                nn.Linear(self.num_features, self.num_features),
+                nn.BatchNorm1d(self.num_features),
+                nn.ReLU(inplace=True),
+                nn.Linear(self.num_features, self.feat_dim),
+            )
+        elif cfg.TRAIN.head_mode == 'linear':
+            self.head = nn.Linear(self.num_features, self.feat_dim)
+        else:
+            self.head = None
+        #######################
 
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
         downsample = None
@@ -127,7 +156,11 @@ class ResNetMulti(nn.Module):
             x1 = None
         x_feat = self.layer4(x)
         x2 = self.layer6(x_feat)  # produce segmap 2
-        return x1, x2, x_feat
+        if self.head is None:
+            return x1, x2, x_feat
+        else:
+            return x1, x2, self.head(x_feat.permute(0, 2, 3, 1).view(-1, self.feat_dim))\
+                        .view(x_feat.shape[0], x_feat.shape[2], x_feat.shape[3], x_feat.shape[1]).permute(0, 3, 1, 2)
 
     def get_1x_lr_params_no_scale(self):
         """
@@ -172,6 +205,32 @@ class ResNetMulti(nn.Module):
                 {'params': self.get_10x_lr_params(), 'lr': 10 * lr}]
 
 
-def get_deeplab_v2(num_classes=19, multi_level=True):
-    model = ResNetMulti(Bottleneck, [3, 4, 23, 3], num_classes, multi_level)
+def get_deeplab_v2(num_classes=19, multi_level=True, cfg=None):
+    model = ResNetMulti(Bottleneck, [3, 4, 23, 3], num_classes, multi_level, cfg)
     return model
+
+
+####################################
+if __name__ == "__main__":
+    class A(nn.Module):
+        def __init__(self):
+            super(A, self).__init__()
+            self.cnn = nn.Conv2d(3, 2, 2)
+            self.fc = nn.Linear(2, 2)
+
+        def forward(self, x):
+            x_feat = self.cnn(x)
+            o = self.fc(x_feat.permute(0, 2, 3, 1).contiguous().view(-1, 2))
+            of = o.view((x_feat.shape[0], x_feat.shape[2], x_feat.shape[3], x_feat.shape[1])).permute(0, 3, 1, 2)
+            return o, of
+
+
+    a = A()
+    import torch
+
+    x = torch.randn((2, 3, 4, 4))
+    o, of = a(x)
+    print(o)
+    print(of)
+    print(o.shape)
+    print(of.shape)

@@ -5,8 +5,6 @@
 # Written by Tuan-Hung Vu
 # --------------------------------------------------------
 import argparse
-import collections
-import copy
 import os
 import os.path as osp
 import pprint
@@ -16,15 +14,11 @@ import warnings
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import yaml
-from sklearn import manifold
 from torch.utils import data
-from tqdm import tqdm
 
 from advent.dataset.cityscapes import CityscapesDataSet
 from advent.dataset.gta5 import GTA5DataSet
-from advent.dataset.synthia import SYNTHIADataSet
 from advent.domain_adaptation.config import cfg, cfg_from_file
 from advent.domain_adaptation.train_UDA import train_domain_adaptation
 from advent.model.deeplabv2 import get_deeplab_v2
@@ -101,7 +95,7 @@ def main():
     # LOAD SEGMENTATION NET
     assert osp.exists(cfg.TRAIN.RESTORE_FROM), f'Missing init model {cfg.TRAIN.RESTORE_FROM}'
     if cfg.TRAIN.MODEL == 'DeepLabv2':
-        model = get_deeplab_v2(num_classes=cfg.NUM_CLASSES, multi_level=cfg.TRAIN.MULTI_LEVEL)
+        model = get_deeplab_v2(num_classes=cfg.NUM_CLASSES, multi_level=cfg.TRAIN.MULTI_LEVEL, cfg=cfg)
         saved_state_dict = torch.load(cfg.TRAIN.RESTORE_FROM)
         if 'DeepLab_resnet_pretrained_imagenet' in cfg.TRAIN.RESTORE_FROM:
             new_params = model.state_dict().copy()
@@ -111,28 +105,20 @@ def main():
                     new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
             model.load_state_dict(new_params)
         else:
-            model.load_state_dict(saved_state_dict)
+            model.load_state_dict(saved_state_dict, strict=False)
     else:
         raise NotImplementedError(f"Not yet supported {cfg.TRAIN.MODEL}")
     model.to(device)
     print('Model loaded from {}'.format(cfg.TRAIN.RESTORE_FROM))
 
     # DATALOADERS
-    if "GTA" in cfg.SOURCE:
-        source_dataset = GTA5DataSet(root=cfg.DATA_DIRECTORY_SOURCE,
-                                     list_path=cfg.DATA_LIST_SOURCE,
-                                     set=cfg.TRAIN.SET_SOURCE,
-                                     max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_SOURCE,
-                                     crop_size=cfg.TRAIN.INPUT_SIZE_SOURCE,
-                                     mean=cfg.TRAIN.IMG_MEAN)
-    else:
-        source_dataset = SYNTHIADataSet(root=cfg.DATA_DIRECTORY_SOURCE_SYNTHIA,
-                                        list_path=cfg.DATA_LIST_SOURCE_SYNTHIA,
-                                        set=cfg.TRAIN.SET_SOURCE_SYNTHIA,
-                                        max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_SOURCE,
-                                        crop_size=cfg.TRAIN.INPUT_SIZE_SOURCE,
-                                        mean=cfg.TRAIN.IMG_MEAN)
-        print("Loaded synthia dataset")
+    source_dataset = GTA5DataSet(root=cfg.DATA_DIRECTORY_SOURCE,
+                                 list_path=cfg.DATA_LIST_SOURCE,
+                                 set=cfg.TRAIN.SET_SOURCE,
+                                 max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_SOURCE,
+                                 crop_size=cfg.TRAIN.INPUT_SIZE_SOURCE,
+                                 mean=cfg.TRAIN.IMG_MEAN)
+
 
     source_loader = data.DataLoader(source_dataset,
                                     batch_size=cfg.TRAIN.BATCH_SIZE_SOURCE,

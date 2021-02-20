@@ -284,7 +284,9 @@ def train_minent(model, trainloader, targetloader, cfg):
         # train on source
         _, batch = trainloader_iter.__next__()
         images_source, src_label, _, _ = batch
-        pred_src_aux, pred_src_main, f_out_s = model(images_source.cuda(device))
+        out = model(images_source.cuda(device))
+        # print(len(out),out)
+        pred_src_aux, pred_src_main, f_out_s = out
         if cfg.TRAIN.MULTI_LEVEL:
             pred_src_aux = interp(pred_src_aux)
             loss_seg_src_aux = loss_calc(pred_src_aux, src_label, device)
@@ -318,7 +320,7 @@ def train_minent(model, trainloader, targetloader, cfg):
                 threshold = adjust_threshold(cfg, i_iter)
             else:
                 threshold = cfg.TRAIN.cluster_threshold
-            if not cfg.TRAIN.pesudolabel_cluster:
+            if not cfg.TRAIN.pseudolabel_cluster:
                 t_labels = torch.argmax(F.interpolate(pred_trg_main.data, f_out_t.size()[2:], mode="nearest"),
                                     dim=1).unsqueeze(1).to(device)
             else:
@@ -381,7 +383,7 @@ def train_minent(model, trainloader, targetloader, cfg):
         if viz_tensorboard:
             log_losses_tensorboard(writer, current_losses, i_iter)
 
-            if i_iter % cfg.TRAIN.TENSORBOARD_VIZRATE == cfg.TRAIN.TENSORBOARD_VIZRATE - 1:
+            if i_iter % cfg.TRAIN.TENSORBOARD_VIZRATE == 0:#cfg.TRAIN.TENSORBOARD_VIZRATE - 1:
                 draw_in_tensorboard(writer, images, i_iter, pred_trg_main, num_classes, 'T')
                 draw_in_tensorboard(writer, images_source, i_iter, pred_src_main, num_classes, 'S')
             if i_iter % cfg.TRAIN.print_lossrate == cfg.TRAIN.print_lossrate - 1:

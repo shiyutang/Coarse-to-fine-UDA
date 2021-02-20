@@ -18,6 +18,7 @@ from advent.dataset.cityscapes import CityscapesDataSet
 from advent.domain_adaptation.config import cfg, cfg_from_file
 from advent.domain_adaptation.Eval_update import evaluate_domain_adaptation
 
+
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore")
 
@@ -63,7 +64,7 @@ def main(config_file, exp_suffix):
     for i in range(n_models):
         if cfg.TEST.MODEL[i] == 'DeepLabv2':
             model = get_deeplab_v2(num_classes=cfg.NUM_CLASSES,
-                                   multi_level=cfg.TEST.MULTI_LEVEL[i]).to(device)
+                                   multi_level=cfg.TEST.MULTI_LEVEL[i], cfg=cfg).to(device)
         else:
             raise NotImplementedError(f"Not yet supported {cfg.TEST.MODEL[i]}")
         models.append(model)
@@ -91,6 +92,7 @@ def main(config_file, exp_suffix):
                                  max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_SOURCE,
                                  crop_size=cfg.TRAIN.INPUT_SIZE_SOURCE,
                                  mean=cfg.TRAIN.IMG_MEAN)
+
     source_loader = data.DataLoader(source_dataset,
                                     batch_size=cfg.TRAIN.BATCH_SIZE_SOURCE,
                                     num_workers=cfg.NUM_WORKERS,

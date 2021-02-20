@@ -2,7 +2,7 @@ NUM_WORKERS: 4
 TRAIN:
   DA_METHOD: MinEnt
   MODEL: DeepLabv2
-  RESTORE_FROM: ../../pretrained_models/DeepLab_resnet_pretrained_imagenet.pth
+  RESTORE_FROM: /root/tsy/ADVENT/pretrained_models/model_54000.pth
   MULTI_LEVEL: True
   LAMBDA_ENT_MAIN: 0.001
   LAMBDA_ENT_AUX: 0.0002

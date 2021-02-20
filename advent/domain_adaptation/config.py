@@ -18,9 +18,9 @@ from advent.utils.serialization import yaml_load
 cfg = EasyDict()
 
 # COMMON CONFIGS
-cfg.name = '0210_ADVENT_ADAIN'
+cfg.name = '0219_ADVENT_SYNTHIA'
 # source domain
-cfg.SOURCE = 'GTA5'
+cfg.SOURCE = 'SYNTHIA'
 # target domain
 cfg.TARGET = 'Cityscapes'
 # Number of workers for dataloading
@@ -30,8 +30,8 @@ cfg.DATA_LIST_SOURCE = str(project_root / 'advent/dataset/gta5_list/{}.txt')
 cfg.DATA_LIST_TARGET = str(project_root / 'advent/dataset/cityscapes_list/{}.txt')
 cfg.DATA_LIST_SOURCE_SYNTHIA = str(project_root / 'advent/dataset/synthia_list/{}.txt')
 # Directories
-cfg.DATA_DIRECTORY_SOURCE = str(project_root / '../CSUDA/data/style_transform/GTA5')
-cfg.DATA_DIRECTORY_TARGET = str(project_root / '../CSUDA/data/style_transform/Cityscapes')
+cfg.DATA_DIRECTORY_SOURCE = str(project_root / '../CSUDA/data/GTA5')
+cfg.DATA_DIRECTORY_TARGET = str(project_root / '../CSUDA/data/Cityscapes')
 cfg.DATA_DIRECTORY_SOURCE_SYNTHIA = str(project_root / '../CSUDA/data/Synthia')
 cfg.DATA_DIRECTORY_STYLE = str(project_root / '../CSUDA/data/ambulance')
 # Number of object classes
@@ -42,7 +42,7 @@ cfg.EXP_ROOT = project_root / 'experiments'
 cfg.EXP_ROOT_SNAPSHOT = osp.join(cfg.EXP_ROOT, 'snapshots')
 cfg.EXP_ROOT_LOGS = osp.join(cfg.EXP_ROOT, 'logs')
 # CUDA
-cfg.GPU_ID = "cuda:0"
+cfg.GPU_ID = "cuda:2"
 
 # TRAIN CONFIGS
 cfg.TRAIN = EasyDict()
@@ -83,6 +83,7 @@ cfg.TRAIN.LAMBDA_ENT_MAIN = 0.001
 cfg.TRAIN.LAMBDA_ENT_AUX = 0.0002
 # contrastive parameters
 cfg.TRAIN.switchcontra = False
+cfg.TRAIN.head_mode = 'byol'
 cfg.TRAIN.contra_temp = 0.07
 cfg.TRAIN.contra_momentum = 0.99
 cfg.TRAIN.LAMBDA_CONTRA_S = 0.001
@@ -90,7 +91,7 @@ cfg.TRAIN.LAMBDA_CONTRA_T = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_T2S = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_S2T = 0.001
 # cluster parameters
-cfg.TRAIN.pesudolabel_cluster = False
+cfg.TRAIN.pseudolabel_cluster = True
 cfg.TRAIN.adjthresholdpoly = False
 cfg.TRAIN.threshPOWER = 4
 cfg.TRAIN.cluster_threshold = 0.05
