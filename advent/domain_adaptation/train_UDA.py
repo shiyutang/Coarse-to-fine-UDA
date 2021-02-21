@@ -322,7 +322,7 @@ def train_minent(model, trainloader, targetloader, cfg):
                 threshold = cfg.TRAIN.cluster_threshold
             if not cfg.TRAIN.pseudolabel_cluster:
                 t_labels = torch.argmax(F.interpolate(pred_trg_main.data, f_out_t.size()[2:], mode="nearest"),
-                                    dim=1).unsqueeze(1).to(device)
+                                        dim=1).unsqueeze(1).to(device)
             else:
                 t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg,
                                              threshold).to(device)
@@ -383,7 +383,7 @@ def train_minent(model, trainloader, targetloader, cfg):
         if viz_tensorboard:
             log_losses_tensorboard(writer, current_losses, i_iter)
 
-            if i_iter % cfg.TRAIN.TENSORBOARD_VIZRATE == 0:#cfg.TRAIN.TENSORBOARD_VIZRATE - 1:
+            if i_iter % cfg.TRAIN.TENSORBOARD_VIZRATE == 0:  # cfg.TRAIN.TENSORBOARD_VIZRATE - 1:
                 draw_in_tensorboard(writer, images, i_iter, pred_trg_main, num_classes, 'T')
                 draw_in_tensorboard(writer, images_source, i_iter, pred_src_main, num_classes, 'S')
             if i_iter % cfg.TRAIN.print_lossrate == cfg.TRAIN.print_lossrate - 1:
@@ -412,14 +412,26 @@ def calculate_average(features, label, device):  # 4,256, 160,320;  4,1, 160,320
 
 
 def get_pseudo_labels(src_center, tgt_features, num_classes, device, config, threshold):  # 4,256,160,320 -> H,256
+    """
+    :param src_center: (19, 2048)
+    :param tgt_features: (batch, 2048, 160, 320)
+    :param num_classes:
+    :param device:
+    :param config:
+    :param threshold:
+    :return:
+    """
     distance = torch.zeros((tgt_features.size(0), num_classes,
                             tgt_features.size(2), tgt_features.size(3))).to(device)  # 4, 19, 160, 320
     # src_center 19, 256
+    std = torch.norm(tgt_features.permute(1, 0, 2, 3).reshape(src_center.size(0), -1), dim=1)  # 19
+    std[std < 1e-12] = 1e-12
+    tgt_features = tgt_features / std.reshape(1, std.size(0), 1, 1).expand_as(tgt_features.size())
+
     for n in range(tgt_features.size(0)):
-        for t in range(num_classes):
+        for t in range(num_classes): # 2048, 160, 320 - 2048
             distance[n][t] = torch.norm(
-                tgt_features[n] - src_center[t].reshape((src_center[t].size(0), 1, 1)).to(device),
-                dim=0)  # 160, 320
+                tgt_features[n] - src_center[t].reshape((src_center[t].size(0), 1, 1)).to(device),dim=0)
 
     dis_min, dis_min_idx = distance.min(dim=1, keepdim=True)  # 4, 1, 160, 320
     distance_second = copy.deepcopy(distance)
@@ -514,7 +526,7 @@ def calculate_src_center(source_all_dataloader, device, network):
 
         src_center = [torch.cat(feat_dict[cls], 0).mean(0, True) for cls in sorted(feat_dict.keys())]  # (19, 256)
         src_center = torch.cat(src_center, 0)
-        src_center = F.normalize(src_center, dim=1)
+        src_center = F.normalize(src_center, dim=1)  # 19, 2048 normalize 1*2048 vector
         print(feat_dict[1][0].shape)
         assert src_center.size(0) == 19, "the shape of source center is incorrect {}, {}".format(
             src_center.size(), feat_dict.keys(), feat_dict[1][0].shape)
@@ -614,7 +626,7 @@ def process_label(device, label):
     pred1 = torch.zeros(batch, 20, w, h).to(device)
     # Return a tensor of elements selected from either :attr`x` or :attr:`y`,
     # depending on :attr:`condition
-    label_trunk = torch.where(label<19, label, torch.Tensor([19]).to(device))
+    label_trunk = torch.where(label < 19, label, torch.Tensor([19]).to(device))
     #  place 1 on label place (replace figure > 19 with 19)
     pred1 = pred1.scatter_(1, label_trunk.long(), 1)
     return pred1
