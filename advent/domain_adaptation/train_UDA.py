@@ -103,7 +103,7 @@ def train_advent(model, trainloader, targetloader, cfg):
         # train on source
         _, batch = trainloader_iter.__next__()
         images_source, labels, _, _ = batch
-        pred_src_aux, pred_src_main = model(images_source.cuda(device))
+        pred_src_aux, pred_src_main, f_out_s = model(images_source.cuda(device))
         if cfg.TRAIN.MULTI_LEVEL:
             pred_src_aux = interp(pred_src_aux)
             loss_seg_src_aux = loss_calc(pred_src_aux, labels, device)
@@ -118,7 +118,7 @@ def train_advent(model, trainloader, targetloader, cfg):
         # adversarial training ot fool the discriminator
         _, batch = targetloader_iter.__next__()
         images, _, _, _ = batch
-        pred_trg_aux, pred_trg_main = model(images.cuda(device))
+        pred_trg_aux, pred_trg_main, f_out_t = model(images.cuda(device))
         if cfg.TRAIN.MULTI_LEVEL:
             pred_trg_aux = interp_target(pred_trg_aux)
             d_out_aux = d_aux(prob_2_entropy(F.softmax(pred_trg_aux)))
@@ -178,7 +178,6 @@ def train_advent(model, trainloader, targetloader, cfg):
                           'loss_adv_trg_main': loss_adv_trg_main,
                           'loss_d_aux': loss_d_aux,
                           'loss_d_main': loss_d_main}
-        print_losses(current_losses, i_iter)
 
         if i_iter % cfg.TRAIN.SAVE_PRED_EVERY == 0 and i_iter != 0:
             print('taking snapshot ...')
@@ -198,6 +197,8 @@ def train_advent(model, trainloader, targetloader, cfg):
             if i_iter % cfg.TRAIN.TENSORBOARD_VIZRATE == cfg.TRAIN.TENSORBOARD_VIZRATE - 1:
                 draw_in_tensorboard(writer, images, i_iter, pred_trg_main, num_classes, 'T')
                 draw_in_tensorboard(writer, images_source, i_iter, pred_src_main, num_classes, 'S')
+                if i_iter % cfg.TRAIN.print_lossrate == cfg.TRAIN.print_lossrate - 1:
+                    print_losses(current_losses, i_iter)
 
 
 def draw_in_tensorboard(writer, images, i_iter, pred_main, num_classes, type_):
@@ -233,12 +234,14 @@ def train_minent(model, trainloader, targetloader, cfg):
     if cfg.TRAIN.switchcontra:
         # initialize HybridMemory
         # src_center = calculate_src_center(trainloader, device, model)
-        # torch.save(src_center, "../../src_center_minent_all.pkl")
-        src_center = torch.load("../../src_center_minent_all.pkl").to(device)
+        # torch.save(src_center, "../../src_center_{}_300.pkl".format(cfg.name))
+        # src_center = torch.load("../../src_center_0226_ADAIN_cityscapes_addcontra_clossw0.001_0.07temp_0.99momentum_moco_rstrcitybest_300.pkl").to(device)
+        src_center = torch.load("./src_center_minent_20.pkl").to(device)
 
         # tgt_center = calculate_tgt_center(targetloader, device, model, cfg.NUM_CLASSES, src_center, cfg)
-        # torch.save(tgt_center, "../../tgt_center_minent_all.pkl")
-        tgt_center = torch.load("../../tgt_center_minent_all.pkl").to(device)
+        # torch.save(tgt_center, "../../tgt_center_{}_300.pkl".format(cfg.name))
+        # tgt_center = torch.load("../../tgt_center_0226_ADAIN_cityscapes_addcontra_clossw0.001_0.07temp_0.99momentum_moco_rstrcitybest_300.pkl").to(device)
+        tgt_center = torch.load("./tgt_center_minent_20.pkl".format(cfg.name)).to(device)
 
         # Hybrid memory 存储源域的原型（需要每次迭代更新）和目标域的聚类后的原型，聚类时根据判别标准进行选择
         src_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,
@@ -284,9 +287,8 @@ def train_minent(model, trainloader, targetloader, cfg):
         # train on source
         _, batch = trainloader_iter.__next__()
         images_source, src_label, _, _ = batch
-        out = model(images_source.cuda(device))
+        pred_src_aux, pred_src_main, f_out_s = model(images_source.cuda(device))
         # print(len(out),out)
-        pred_src_aux, pred_src_main, f_out_s = out
         if cfg.TRAIN.MULTI_LEVEL:
             pred_src_aux = interp(pred_src_aux)
             loss_seg_src_aux = loss_calc(pred_src_aux, src_label, device)
@@ -296,23 +298,25 @@ def train_minent(model, trainloader, targetloader, cfg):
         loss_seg_src_main = loss_calc(pred_src_main, src_label, device)
         loss = (cfg.TRAIN.LAMBDA_SEG_MAIN * loss_seg_src_main
                 + cfg.TRAIN.LAMBDA_SEG_AUX * loss_seg_src_aux)
+        current_losses = {'loss_seg_src_aux': loss_seg_src_aux, 'loss_seg_src_main': loss_seg_src_main}
 
         # adversarial training with minent
-        _, batch = targetloader_iter.__next__()
-        images, tgt_label, _, _ = batch
-        pred_trg_aux, pred_trg_main, f_out_t = model(images.cuda(device))
-        pred_trg_aux = interp_target(pred_trg_aux)
-        pred_trg_main = interp_target(pred_trg_main)
-        pred_prob_trg_aux = F.softmax(pred_trg_aux)
-        pred_prob_trg_main = F.softmax(pred_trg_main)
+        if not cfg.TRAIN.baseline:
+            _, batch = targetloader_iter.__next__()
+            images, tgt_label, _, _ = batch
+            pred_trg_aux, pred_trg_main, f_out_t = model(images.cuda(device))
+            pred_trg_aux = interp_target(pred_trg_aux)
+            pred_trg_main = interp_target(pred_trg_main)
+            pred_prob_trg_aux = F.softmax(pred_trg_aux)
+            pred_prob_trg_main = F.softmax(pred_trg_main)
 
-        loss_target_entp_aux = entropy_loss(pred_prob_trg_aux)
-        loss_target_entp_main = entropy_loss(pred_prob_trg_main)
-        loss += (cfg.TRAIN.LAMBDA_ENT_AUX * loss_target_entp_aux
-                 + cfg.TRAIN.LAMBDA_ENT_MAIN * loss_target_entp_main)
+            loss_target_entp_aux = entropy_loss(pred_prob_trg_aux)
+            loss_target_entp_main = entropy_loss(pred_prob_trg_main)
+            loss += (cfg.TRAIN.LAMBDA_ENT_AUX * loss_target_entp_aux
+                     + cfg.TRAIN.LAMBDA_ENT_MAIN * loss_target_entp_main)
+            current_losses.update(dict(loss_ent_aux=loss_target_entp_aux, loss_ent_main=loss_target_entp_main))
 
         # contrastive loss
-        current_losses = {}
         if cfg.TRAIN.switchcontra:
             tgt_label = F.interpolate(tgt_label.float().unsqueeze(1), f_out_t.size()[2:],
                                       mode="nearest").int().view(-1, 1).to(device)  # 4,1, 160,320
@@ -357,24 +361,22 @@ def train_minent(model, trainloader, targetloader, cfg):
             b = b[b != -1]
             current_pseudo_acc = 100 * (a == b).sum() / len(b)
             pseudo_acc = 100 * (t_labels[:-1:300] == (tgt_label[:-1:300].squeeze(1))).sum() / len(tgt_label[:-1:300])
-            current_losses = {'loss_contra_src': loss_s,
-                              'loss_contra_tgt': loss_t,
-                              'pseudo_acc': pseudo_acc,
-                              'current_pseudo_acc': current_pseudo_acc}
+            current_losses.update({'loss_contra_src': loss_s,
+                                   'loss_contra_tgt': loss_t,
+                                   'pseudo_acc': pseudo_acc,
+                                   'current_pseudo_acc': current_pseudo_acc})
 
         loss.backward()
         optimizer.step()
-
-        current_losses.update({'loss_seg_src_aux': loss_seg_src_aux,
-                               'loss_seg_src_main': loss_seg_src_main,
-                               'loss_ent_aux': loss_target_entp_aux,
-                               'loss_ent_main': loss_target_entp_main})
 
         if i_iter % cfg.TRAIN.SAVE_PRED_EVERY == 0 and i_iter != 0:
             print('taking snapshot ...')
             print('exp =', cfg.TRAIN.SNAPSHOT_DIR)
             torch.save(model.state_dict(),
                        osp.join(cfg.TRAIN.SNAPSHOT_DIR, f'model_{i_iter}.pth'))
+            if cfg.TRAIN.switchcontra:
+                torch.save(src_memory.features, "../../src_center_{}_end.pkl".format(cfg.name))
+                torch.save(tgt_memory.features , "../../tgt_center_{}_end.pkl".format(cfg.name))
             if i_iter >= cfg.TRAIN.EARLY_STOP - 1:
                 break
         sys.stdout.flush()
@@ -384,7 +386,8 @@ def train_minent(model, trainloader, targetloader, cfg):
             log_losses_tensorboard(writer, current_losses, i_iter)
 
             if i_iter % cfg.TRAIN.TENSORBOARD_VIZRATE == 0:  # cfg.TRAIN.TENSORBOARD_VIZRATE - 1:
-                draw_in_tensorboard(writer, images, i_iter, pred_trg_main, num_classes, 'T')
+                if not cfg.TRAIN.baseline:
+                    draw_in_tensorboard(writer, images, i_iter, pred_trg_main, num_classes, 'T')
                 draw_in_tensorboard(writer, images_source, i_iter, pred_src_main, num_classes, 'S')
             if i_iter % cfg.TRAIN.print_lossrate == cfg.TRAIN.print_lossrate - 1:
                 print_losses(current_losses, i_iter)
@@ -424,14 +427,15 @@ def get_pseudo_labels(src_center, tgt_features, num_classes, device, config, thr
     distance = torch.zeros((tgt_features.size(0), num_classes,
                             tgt_features.size(2), tgt_features.size(3))).to(device)  # 4, 19, 160, 320
     # src_center 19, 256
-    std = torch.norm(tgt_features.permute(1, 0, 2, 3).reshape(src_center.size(0), -1), dim=1)  # 19
-    std[std < 1e-12] = 1e-12
-    tgt_features = tgt_features / std.reshape(1, std.size(0), 1, 1).expand_as(tgt_features.size())
+    if config.TRAIN.normEuclid:
+        std = torch.norm(tgt_features.permute(1, 0, 2, 3).reshape(src_center.size(1), -1), dim=1)  # 2048
+        std[std < 1e-12] = 1e-12
+        tgt_features = tgt_features / std.reshape(1, std.size(0), 1, 1).expand_as(tgt_features)
 
     for n in range(tgt_features.size(0)):
-        for t in range(num_classes): # 2048, 160, 320 - 2048
+        for t in range(num_classes):  # 2048, 160, 320 - 2048
             distance[n][t] = torch.norm(
-                tgt_features[n] - src_center[t].reshape((src_center[t].size(0), 1, 1)).to(device),dim=0)
+                tgt_features[n] - src_center[t].reshape((src_center[t].size(0), 1, 1)).to(device), dim=0)
 
     dis_min, dis_min_idx = distance.min(dim=1, keepdim=True)  # 4, 1, 160, 320
     distance_second = copy.deepcopy(distance)
@@ -521,7 +525,7 @@ def calculate_src_center(source_all_dataloader, device, network):
                     # average pool 除以特征图大小求平均，每个类都一样，因此需要除以权重因子
                     feat_dict[t].append(s.unsqueeze(0).squeeze(2).squeeze(2))
 
-            if i == 8000:
+            if i == 300:
                 break
 
         src_center = [torch.cat(feat_dict[cls], 0).mean(0, True) for cls in sorted(feat_dict.keys())]  # (19, 256)
@@ -576,7 +580,7 @@ def calculate_tgt_center(target_train_dataloader, device, network, num_classes, 
                     # average pool 除以特征图大小求平均，每个类都一样，因此需要除以权重因子
                     feat_dict[t].append(s.unsqueeze(0).squeeze(2).squeeze(2))
 
-            if i == 3000:
+            if i == 300:
                 break
 
         tgt_center = [torch.cat(feat_dict[cls], 0).mean(0, keepdim=True) for cls in sorted(feat_dict.keys())]

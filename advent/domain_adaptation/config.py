@@ -18,13 +18,13 @@ from advent.utils.serialization import yaml_load
 cfg = EasyDict()
 
 # COMMON CONFIGS
-cfg.name = '0219_ADVENT_SYNTHIA'
+cfg.name = '0305_test'
 # source domain
-cfg.SOURCE = 'SYNTHIA'
+cfg.SOURCE = 'GTA5'
 # target domain
 cfg.TARGET = 'Cityscapes'
 # Number of workers for dataloading
-cfg.NUM_WORKERS = 4
+cfg.NUM_WORKERS = 0
 # List of training images
 cfg.DATA_LIST_SOURCE = str(project_root / 'advent/dataset/gta5_list/{}.txt')
 cfg.DATA_LIST_TARGET = str(project_root / 'advent/dataset/cityscapes_list/{}.txt')
@@ -42,7 +42,7 @@ cfg.EXP_ROOT = project_root / 'experiments'
 cfg.EXP_ROOT_SNAPSHOT = osp.join(cfg.EXP_ROOT, 'snapshots')
 cfg.EXP_ROOT_LOGS = osp.join(cfg.EXP_ROOT, 'logs')
 # CUDA
-cfg.GPU_ID = "cuda:2"
+cfg.GPU_ID = "cuda:0"
 
 # TRAIN CONFIGS
 cfg.TRAIN = EasyDict()
@@ -75,6 +75,7 @@ cfg.TRAIN.LAMBDA_SEG_AUX = 0.1  # weight of conv4 prediction. Used in multi-leve
 # Domain adaptation
 cfg.TRAIN.DA_METHOD = 'AdvEnt'
 # Adversarial training params
+cfg.TRAIN.baseline = False
 cfg.TRAIN.LEARNING_RATE_D = 1e-4
 cfg.TRAIN.LAMBDA_ADV_MAIN = 0.001
 cfg.TRAIN.LAMBDA_ADV_AUX = 0.0002
@@ -82,16 +83,17 @@ cfg.TRAIN.LAMBDA_ADV_AUX = 0.0002
 cfg.TRAIN.LAMBDA_ENT_MAIN = 0.001
 cfg.TRAIN.LAMBDA_ENT_AUX = 0.0002
 # contrastive parameters
-cfg.TRAIN.switchcontra = False
-cfg.TRAIN.head_mode = 'byol'
+cfg.TRAIN.switchcontra = True
+cfg.TRAIN.head_mode = 'moco'
 cfg.TRAIN.contra_temp = 0.07
-cfg.TRAIN.contra_momentum = 0.99
+cfg.TRAIN.contra_momentum = 0.9
 cfg.TRAIN.LAMBDA_CONTRA_S = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_T = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_T2S = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_S2T = 0.001
 # cluster parameters
 cfg.TRAIN.pseudolabel_cluster = True
+cfg.TRAIN.normEuclid = False
 cfg.TRAIN.adjthresholdpoly = False
 cfg.TRAIN.threshPOWER = 4
 cfg.TRAIN.cluster_threshold = 0.05

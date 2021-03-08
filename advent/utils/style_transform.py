@@ -210,7 +210,7 @@ def style_transfer_AdaIN(content=None, content_dir=None, style=None, style_dir=N
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     output_dir = Path(output_path)
     output_dir.mkdir(exist_ok=True, parents=True)
@@ -302,9 +302,9 @@ def style_transfer_AdaIN(content=None, content_dir=None, style=None, style_dir=N
 
 
 if __name__ == '__main__':
-    # content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][0:]
+    content_dirs = [f for f in Path("/root/tsy/CSUDA/data/GTA5/images").glob("*")][0:]
     dirs = "/root/tsy/CSUDA/data/Cityscapes/leftImg8bit/train"
-    content_dirs = []
+    # content_dirs = []
     with open("../dataset/cityscapes_list/train.txt", 'r') as f:
         for line in f.readlines():
             content_dirs.append(Path(dirs).joinpath(line.strip()))
@@ -316,20 +316,19 @@ if __name__ == '__main__':
     style_interpolation_weight = "1,1,1,1"
 
     style_dir = Path("/root/tsy/CSUDA/data/ambulance")  # style_dirs[4]
-    print("style_dir", style_dir)
-    networks = ['experiments/gta5pcity_ambulance_alpha1wts1']
-    # 'experiments/gta5pcity_ambulance_alpha1wts1awts1e-4_affineloss_pretrain11']
+    networks = ['experiments/0224_alpha1_weights1_cityscapes_resize1024_bs4']
+    print("start transform", networks[0])
     for network in networks:
         for content in tqdm(content_dirs):
             style = random.sample([p for p in style_dir.glob("*")], 4)
             style_transfer_AdaIN(content=content, content_dir=None, style=style, style_dir=None,
                                  vgg_pretrain="../../pretrained_models/vgg_normalised.pth",
                                  # decoder_pretrain="/data/Projects/pytorch-AdaIN/experiments/gta5pcity_ambulance_alpha1wts1/decoder_iter_160000.pth.tar",
-                                 decoder_pretrain='../../pretrained_models/decoder.pth',
-                                 # decoder_pretrain='/pytorch-AdaIN/{}/decoder_iter_160000.pth.tar'.format(network),
+                                 # decoder_pretrain='../../pretrained_models/decoder.pth',
+                                 decoder_pretrain='/root/tsy/ADAIN/{}/decoder_iter_160000.pth.tar'.format(network),
                                  vgg=vgg, decoder=decoder, do_interpolation=True,
                                  content_size=(1024, 2048), style_size=(1024, 2048), crop=None, save_ext="png",
                                  # output_path='/data/Projects/MaxSquareLoss/output/style_out',
-                                 output_path='../../../CSUDA/data/style_transform/GTA5/images/',
+                                 output_path='/root/tsy/CSUDA/data/style_transform/0224_alpha1_weights1_cityscapes_resize1024_bs4/images/',
                                  preserve_color=None, alpha=1.0,
                                  style_interpolation_weight=style_interpolation_weight)
