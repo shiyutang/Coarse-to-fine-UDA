@@ -1,68 +1,33 @@
-# ADVENT: Adversarial Entropy Minimization for Domain Adaptation in Semantic Segmentation
+# CFContra: Unsupervised domain adaptation via coarse-to-fine feature alignment method using contrastive learning
 
-## Updates
-- *02/2020*: Using CycleGAN translated images, The AdvEnt model achieves (**46.3%**) on GTA5-2-Cityscapes
-- *09/2019*: check out our new paper [DADA: Depth-aware Domain Adaptation in Semantic Segmentation](https://arxiv.org/abs/1904.01886) (accepted to ICCV 2019). With a depth-aware UDA framework, we leverage depth as the privileged information at train time to boost target performance. [Pytorch](https://github.com/valeoai/DADA) code and pre-trained models are coming soon.
 
 ## Paper
-![](./teaser.jpg)
+![](./teasorc.png)
 
-[ADVENT: Adversarial Entropy Minimization for Domain Adaptation in Semantic Segmentation](https://arxiv.org/abs/1811.12833)  
- [Tuan-Hung Vu](https://tuanhungvu.github.io/),  [Himalaya Jain](https://himalayajain.github.io/), [Maxime Bucher](https://maximebucher.github.io/), [Matthieu Cord](http://webia.lip6.fr/~cord/), [Patrick Pérez](https://ptrckprz.github.io/)  
- valeo.ai, France  
- IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2019 (**Oral**)
-
-If you find this code useful for your research, please cite our [paper](https://arxiv.org/abs/1811.12833):
-
-```
-@inproceedings{vu2018advent,
-  title={ADVENT: Adversarial Entropy Minimization for Domain Adaptation in Semantic Segmentation},
-  author={Vu, Tuan-Hung and Jain, Himalaya and Bucher, Maxime and Cord, Mathieu and P{\'e}rez, Patrick},
-  booktitle={CVPR},
-  year={2019}
-}
-```
 
 ## Abstract
-Semantic segmentation is a key problem for many computer vision tasks. While approaches based on convolutional neural networks constantly break new records on different benchmarks, generalizing well to diverse testing environments remains a major challenge. In numerous real world applications, there is indeed a large gap between data distributions in train and test domains, which results in severe performance loss at run-time. In this work, we address the task of unsupervised domain adaptation in semantic segmentation with losses based on the entropy of the pixel-wise predictions. To this end, we propose two novel, complementary methods using (i) an entropy loss and (ii) an adversarial loss respectively. We demonstrate state-of-the-art performance in semantic segmentation on two challenging *synthetic-2-real* set-ups and show that the approach can also be used for detection.
-
+Previous feature alignment methods in Unsupervised domain adaptation(UDA) mostly only align global features without considering the mismatch between class-wise features. In this work, we propose a new coarse-to-fine feature alignment method using contrastive learning called CFContra. It draws class-wise features closer than coarse feature alignment or class-wise feature alignment only, therefore improves the model's performance to a great extent. We build it upon one of the most effective methods of UDA called entropy minimization to further improve performance. In particular, to prevent excessive memory occupation when applying contrastive loss in semantic segmentation, we devise a new way to build and update the memory bank. In this way, we make the algorithm more efficient and viable with limited memory. Extensive experiments show the effectiveness of our method and model trained on the GTA5 to Cityscapes dataset has boost mIOU by 3.5 compared to the MinEnt algorithm. Our code will be publicly available.
 ## Demo
 [![](http://img.youtube.com/vi/Ihmz0yEqrq0/0.jpg)](http://www.youtube.com/watch?v=Ihmz0yEqrq0 "")
 
 ## Preparation
 
 ### Pre-requisites
-* Python 3.7
-* Pytorch >= 0.4.1
-* CUDA 9.0 or higher
+* Python 3.8
+* Pytorch <= 1.7.0
+* CUDA 10.0 or higher
 
 ### Installation
 0. Clone the repo:
 ```bash
-$ git clone https://github.com/valeoai/ADVENT
-$ cd ADVENT
+$ git clone https://github.com/shiyutang/Coarse-to-fine-UDA.git
+$ cd Coarse-to-fine-UDA
 ```
 
-1. Install OpenCV if you don't already have it:
-
-```bash
-$ conda install -c menpo opencv
-```
-
-2. Install this repository and the dependencies using pip:
+1. Install this repository and the dependencies using pip:
 ```bash
 $ pip install -e <root_dir>
 ```
-
-With this, you can edit the ADVENT code on the fly and import function 
-and classes of ADVENT in other project as well.
-
-3. Optional. To uninstall this package, run:
-```bash
-$ pip uninstall ADVENT
-```
-
-You can take a look at the [Dockerfile](./Dockerfile) if you are uncertain about steps to install this project.
 
 ### Datasets
 By default, the datasets are put in ```<root_dir>/data```. We use symlinks to hook the ADVENT codebase to the datasets. An alternative option is to explicitlly specify the parameters ```DATA_DIRECTORY_SOURCE``` and ```DATA_DIRECTORY_TARGET``` in YML configuration files.
@@ -92,14 +57,11 @@ Pre-trained models can be downloaded [here](https://github.com/valeoai/ADVENT/re
 For evaluation, execute:
 ```bash
 $ cd <root_dir>/advent/scripts
-$ python test.py --cfg ./configs/advent_pretrained.yml
-$ python test.py --cfg ./configs/advent_cyclegan_pretrained.yml 	% trained on cycleGAN translated images
 $ python test.py --cfg ./configs/minent_pretrained.yml
-$ python test.py --cfg ./configs/advent+minent.yml
 ```
 
 ### Training
-For the experiments done in the paper, we used pytorch 0.4.1 and CUDA 9.0. To ensure reproduction, the random seed has been fixed in the code. Still, you may need to train a few times to reach the comparable performance.
+For the experiments done in the paper, we used pytorch 1.7.0 and CUDA 10.2. To ensure reproduction, the random seed has been fixed in the code. Still, you may need to train a few times to reach the comparable performance.
 
 By default, logs and snapshots are stored in ```<root_dir>/experiments``` with this structure:
 ```bash
@@ -107,31 +69,20 @@ By default, logs and snapshots are stored in ```<root_dir>/experiments``` with t
 <root_dir>/experiments/snapshots
 ```
 
-To train AdvEnt:
-```bash
-$ cd <root_dir>/advent/scripts
-$ python train.py --cfg ./configs/advent.yml
-$ python train.py --cfg ./configs/advent.yml --tensorboard         % using tensorboard
 ```
-To train MinEnt:
+To train:
 ```bash
 $ python train.py --cfg ./configs/minent.yml
 $ python train.py --cfg ./configs/minent.yml --tensorboard         % using tensorboard
 ```
 
 ### Testing
-To test AdvEnt:
-```bash
-$ cd <root_dir>/advent/scripts
-$ python test.py --cfg ./configs/advent.yml
-```
-To test MinEnt:
 ```bash
 $ python test.py --cfg ./configs/minent.yml
 ```
 
 ## Acknowledgements
-This codebase is heavily borrowed from [AdaptSegNet](https://github.com/wasidennis/AdaptSegNet) and [Pytorch-Deeplab](https://github.com/speedinghzl/Pytorch-Deeplab).
+This codebase is heavily borrowed from [Advent](https://github.com/valeoai/ADVENT) and [SpCL](https://github.com/yxgeee/SpCL).
 
 ## License
-ADVENT is released under the [Apache 2.0 license](./LICENSE).
+CFContra is released under the [Apache 2.0 license](./LICENSE).
