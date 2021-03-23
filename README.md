@@ -14,7 +14,7 @@ Previous feature alignment methods in Unsupervised domain adaptation(UDA) mostly
 
 ### Pre-requisites
 * Python 3.8
-* Pytorch <= 1.7.0
+* Pytorch 1.7.0
 * CUDA 10.0 or higher
 
 ### Installation
