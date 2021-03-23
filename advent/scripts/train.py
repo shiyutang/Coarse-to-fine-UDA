@@ -1,8 +1,6 @@
 # --------------------------------------------------------
-# AdvEnt training
-# Copyright (c) 2019 valeo.ai
-#
-# Written by Tuan-Hung Vu
+# Written by Shiyu Tang
+# Adapted from https://github.com/valeoai/ADVENT/tree/master/advent
 # --------------------------------------------------------
 import argparse
 import os
@@ -19,6 +17,7 @@ from torch.utils import data
 
 from advent.dataset.cityscapes import CityscapesDataSet
 from advent.dataset.gta5 import GTA5DataSet
+from advent.dataset.synthia import SYNTHIADataSet
 from advent.domain_adaptation.config import cfg, cfg_from_file
 from advent.domain_adaptation.train_UDA import train_domain_adaptation
 from advent.model.deeplabv2 import get_deeplab_v2
@@ -112,13 +111,21 @@ def main():
     print('Model loaded from {}'.format(cfg.TRAIN.RESTORE_FROM))
 
     # DATALOADERS
-    source_dataset = GTA5DataSet(root=cfg.DATA_DIRECTORY_SOURCE,
-                                 list_path=cfg.DATA_LIST_SOURCE,
-                                 set=cfg.TRAIN.SET_SOURCE,
-                                 max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_SOURCE,
-                                 crop_size=cfg.TRAIN.INPUT_SIZE_SOURCE,
-                                 mean=cfg.TRAIN.IMG_MEAN)
-
+    if "GTA" in cfg.SOURCE:
+        source_dataset = GTA5DataSet(root=cfg.DATA_DIRECTORY_SOURCE,
+                                     list_path=cfg.DATA_LIST_SOURCE,
+                                     set=cfg.TRAIN.SET_SOURCE,
+                                     max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_SOURCE,
+                                     crop_size=cfg.TRAIN.INPUT_SIZE_SOURCE,
+                                     mean=cfg.TRAIN.IMG_MEAN)
+    else:
+        source_dataset = SYNTHIADataSet(root=cfg.DATA_DIRECTORY_SOURCE_SYNTHIA,
+                                        list_path=cfg.DATA_LIST_SOURCE_SYNTHIA,
+                                        set=cfg.TRAIN.SET_SOURCE_SYNTHIA,
+                                        max_iters=cfg.TRAIN.MAX_ITERS * cfg.TRAIN.BATCH_SIZE_SOURCE,
+                                        crop_size=cfg.TRAIN.INPUT_SIZE_SOURCE,
+                                        mean=cfg.TRAIN.IMG_MEAN)
+        print("Loaded synthia dataset")
 
     source_loader = data.DataLoader(source_dataset,
                                     batch_size=cfg.TRAIN.BATCH_SIZE_SOURCE,

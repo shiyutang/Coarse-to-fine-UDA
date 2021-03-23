@@ -1,8 +1,8 @@
 # --------------------------------------------------------
 # Domain adpatation evaluation
-# Copyright (c) 2019 valeo.ai
 #
-# Written by Tuan-Hung Vu
+# Written by Shiyu Tang
+# Adapted from https://github.com/valeoai/ADVENT/tree/master/advent
 # --------------------------------------------------------
 
 import os.path as osp

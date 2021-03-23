@@ -153,19 +153,22 @@ if __name__ == '__main__':
     models = [#"/root/tsy/ADVENT/experiments/snapshots/0222_ADAIN_alpha1_weights1_resize1024_bs4_GTA52Cityscapes_DeepLabv2_MinEnt/model_106000.pth",
               # "/root/tsy/ADVENT/experiments/snapshots/GTA2Cityscapes_DeepLabv2_MinEnt/model_94000.pth",
               # "/root/tsy/ADVENT/experiments/snapshots/0223_srconly_baseline_GTA52Cityscapes_DeepLabv2_MinEnt/model_94000.pth",
-              "/root/tsy/ADVENT/experiments/snapshots/0210_addcontra_clossw0.001_0.07temp_0.99momentum_moco_GTA52Cityscapes_DeepLabv2_MinEnt/model_24000.pth"]
+              # "/root/tsy/ADVENT/experiments/snapshots/0210_addcontra_clossw0.001_0.07temp_0.99momentum_moco_GTA52Cityscapes_DeepLabv2_MinEnt/model_24000.pth"]
               # "/root/tsy/ADVENT/experiments/snapshots/0222_ADAIN_alpha1_weights1_resize1024_bs4_GTA52Cityscapes_DeepLabv2_MinEnt/model_96000.pth",]
               # "/root/tsy/ADVENT/experiments/snapshots/GTA2Cityscapes_DeepLabv2_MinEnt/model_114000.pth",]
               # "/root/tsy/ADVENT/experiments/snapshots/0223_srconly_baseline_GTA52Cityscapes_DeepLabv2_MinEnt/model_94000.pth",]
               # "/root/tsy/ADVENT/experiments/snapshots/0210_addcontra_clossw0.001_0.07temp_0.99momentum_moco_GTA52Cityscapes_DeepLabv2_MinEnt/model_114000.pth"]
-    stems = [ #"PICS_0222_ADAIN_alpha1_weights1_resize1024_bs4_GTA52Cityscapes_DeepLabv2_MinEnt",
+             "/root/tsy/ADVENT/experiments/snapshots/0227_ADAIN_cityscapes_addcontra_clossw0.001_0.07temp_0.99momentum_moco_rstrcitybest_realdst_GTA52Cityscapes_DeepLabv2_MinEnt/model_60000.pth",]
+    stems = [# "PICS_0222_ADAIN_alpha1_weights1_resize1024_bs4_GTA52Cityscapes_DeepLabv2_MinEnt",
              # "PICS_GTA2Cityscapes_DeepLabv2_MinEnt",
              # 'PICS_0223_srconly_baseline_GTA52Cityscapes_DeepLabv2_MinEnt',
              # "PICS_0210_addcontra_clossw0.001_0.07temp_0.99momentum_moco_GTA52Cityscapes_DeepLabv2_MinEnt",
              # "PICS_0222_ADAIN_alpha1_weights1_resize1024_bs4_GTA52Cityscapes_DeepLabv2_MinEnt",]
              # "PICS_GTA2Cityscapes_DeepLabv2_MinEnt",]
              # "PICS_0223_srconly_baseline_GTA52Cityscapes_DeepLabv2_MinEnt",]
-             "PICS_0210_addcontra_clossw0.001_0.07temp_0.99momentum_moco_GTA52Cityscapes_DeepLabv2_MinEnt"]
+             # "PICS_0210_addcontra_clossw0.001_0.07temp_0.99momentum_moco_GTA52Cityscapes_DeepLabv2_MinEnt"]
+            "PICS_0227_ADAIN_cityscapes_addcontra_clossw0.001_0.07temp_0.99momentum_moco_rstrcitybest_realdst_GTA52Cityscapes_DeepLabv2_MinEnt"]
+
     src_tag = False
     for i, modelname in enumerate(models):
         if i >= 3:

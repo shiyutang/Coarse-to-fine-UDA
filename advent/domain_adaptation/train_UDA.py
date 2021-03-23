@@ -1,8 +1,8 @@
 # --------------------------------------------------------
 # Domain adpatation training
-# Copyright (c) 2019 valeo.ai
-#
-# Written by Tuan-Hung Vu
+
+# Written by Shiyu Tang
+# Adapted from https://github.com/valeoai/ADVENT/tree/master/advent
 # --------------------------------------------------------
 import collections
 import copy
@@ -16,6 +16,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import torch.optim as optim
+from sklearn import manifold
 from tensorboardX import SummaryWriter
 from torch import nn
 from torchvision.utils import make_grid
@@ -233,15 +234,15 @@ def train_minent(model, trainloader, targetloader, cfg):
 
     if cfg.TRAIN.switchcontra:
         # initialize HybridMemory
-        # src_center = calculate_src_center(trainloader, device, model)
+        # src_center = calculate_src_center(trainloader, device, model, cfg)
         # torch.save(src_center, "../../src_center_{}_300.pkl".format(cfg.name))
-        # src_center = torch.load("../../src_center_0226_ADAIN_cityscapes_addcontra_clossw0.001_0.07temp_0.99momentum_moco_rstrcitybest_300.pkl").to(device)
-        src_center = torch.load("./src_center_minent_20.pkl").to(device)
+        src_center = torch.load("../../src_center_{}_300.pkl".format(cfg.name))
+        # src_center = torch.load("./src_center_minent_20.pkl").to(device)
 
-        # tgt_center = calculate_tgt_center(targetloader, device, model, cfg.NUM_CLASSES, src_center, cfg)
-        # torch.save(tgt_center, "../../tgt_center_{}_300.pkl".format(cfg.name))
+        tgt_center = calculate_tgt_center(targetloader, device, model, cfg.NUM_CLASSES, src_center, cfg)
+        torch.save(tgt_center, "../../tgt_center_{}_300.pkl".format(cfg.name))
         # tgt_center = torch.load("../../tgt_center_0226_ADAIN_cityscapes_addcontra_clossw0.001_0.07temp_0.99momentum_moco_rstrcitybest_300.pkl").to(device)
-        tgt_center = torch.load("./tgt_center_minent_20.pkl".format(cfg.name)).to(device)
+        # tgt_center = torch.load("./tgt_center_minent_20.pkl".format(cfg.name)).to(device)
 
         # Hybrid memory 存储源域的原型（需要每次迭代更新）和目标域的聚类后的原型，聚类时根据判别标准进行选择
         src_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,
@@ -330,26 +331,26 @@ def train_minent(model, trainloader, targetloader, cfg):
             else:
                 t_labels = get_pseudo_labels(src_memory.features, f_out_t.data, num_classes, device, cfg,
                                              threshold).to(device)
-            t_center = calculate_average(f_out_t, t_labels, device)
+            t_center = calculate_average(f_out_t, t_labels, device, cfg)
             t_labels[t_labels == 255] = -1
             tgt_label[tgt_label == 255] = -1
 
             src_label = F.interpolate(src_label.float().unsqueeze(1), size=f_out_s.size()[2:], mode="nearest").to(
                 device)
-            s_center = calculate_average(f_out_s, src_label, device)
+            s_center = calculate_average(f_out_s, src_label, device, cfg)
             src_label[src_label == 255] = -1
 
             # print(s_center.shape, f_out_s.shape)  # [19, 2048] [1, 2048, 91, 161]
             # print(src_label.shape, src_label.min(), src_label.max()) 1, 1, 65, 129
             loss_s = src_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
-                                src_label.flatten().long(), torch.arange(19), s_center)
+                                src_label.flatten().long(), torch.arange(cfg.NUM_CLASSES), s_center)
             loss_t = tgt_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
-                                t_labels.flatten().long(), torch.arange(19), t_center)
+                                t_labels.flatten().long(), torch.arange(cfg.NUM_CLASSES), t_center)
 
             loss_tgt2src = src_memory(f_out_t.permute(0, 2, 3, 1).reshape(-1, 2048),
-                                      t_labels.flatten().long(), torch.arange(19), t_center)
+                                      t_labels.flatten().long(), torch.arange(cfg.NUM_CLASSES), t_center)
             loss_src2tgt = tgt_memory(f_out_s.permute(0, 2, 3, 1).reshape(-1, 2048),
-                                      src_label.flatten().long(), torch.arange(19), s_center)
+                                      src_label.flatten().long(), torch.arange(cfg.NUM_CLASSES), s_center)
 
             loss += cfg.TRAIN.LAMBDA_CONTRA_S * loss_s + cfg.TRAIN.LAMBDA_CONTRA_T * loss_t
             loss += cfg.TRAIN.LAMBDA_CONTRA_S2T * loss_src2tgt + cfg.TRAIN.LAMBDA_CONTRA_T2S * loss_tgt2src
@@ -393,17 +394,17 @@ def train_minent(model, trainloader, targetloader, cfg):
                 print_losses(current_losses, i_iter)
 
 
-def calculate_average(features, label, device):  # 4,256, 160,320;  4,1, 160,320
+def calculate_average(features, label, device,cfg):  # 4,256, 160,320;  4,1, 160,320
     feat_dict = collections.defaultdict(list)
     # if 19 in label:
     #     start = 19
     # else:
     #     start = 0
     # pred_label = process_label((label - start).float())  # 4,20, 160,320
-    pred_label = process_label(device, label.float())  # 4,20, 160,320
+    pred_label = process_label(device, label.float(),cfg)  # 4,20, 160,320
     scale_factor = F.adaptive_avg_pool2d(pred_label, output_size=1)  # 4,20, 1, 1
     for i in range(features.size(0)):
-        for cls in range(19):
+        for cls in range(cfg.NUM_CLASSES):
             tmp = features[i] * pred_label[i][cls]  # 256,160,320
             tmp = F.adaptive_avg_pool2d(tmp, output_size=1) / (scale_factor[i][cls] + 1e-6)  # 256 1 1
             feat_dict[cls].append(tmp.unsqueeze(0).squeeze(2).squeeze(2))
@@ -457,7 +458,7 @@ def get_pseudo_labels(src_center, tgt_features, num_classes, device, config, thr
     return dis_min_idx  # 4, 1, 160,
 
 
-def process_label(device, label):
+def process_label(device, label, cfg):
     """
     :desc: turn the label into one-hot format
     """
@@ -465,7 +466,7 @@ def process_label(device, label):
     pred1 = torch.zeros(batch, 20, w, h).to(device)
     # Return a tensor of elements selected from either :attr`x` or :attr:`y`,
     # depending on :attr:`condition
-    label_trunk = torch.where(19 > label, label, torch.Tensor([19]).to(device))
+    label_trunk = torch.where(cfg.NUM_CLASSES > label, label, torch.Tensor([cfg.NUM_CLASSES]).to(device))
     #  place 1 on label place (replace figure > 19 with 19)
     pred1 = pred1.scatter_(1, label_trunk.long(), 1)
     return pred1
@@ -500,7 +501,7 @@ def train_domain_adaptation(model, trainloader, targetloader, cfg):
         raise NotImplementedError(f"Not yet supported DA method {cfg.TRAIN.DA_METHOD}")
 
 
-def calculate_src_center(source_all_dataloader, device, network):
+def calculate_src_center(source_all_dataloader, device, network, cfg):
     feat_dict = collections.defaultdict(list)
     with torch.no_grad():
         for i, (source_img, source_label, a, b) in tqdm(enumerate(source_all_dataloader)):
@@ -511,13 +512,13 @@ def calculate_src_center(source_all_dataloader, device, network):
                 # 每一个特征根据当前方位的标签，归入到某个类别，并根据个数求平均 label (4, 256, 160, 320)，每个batch累计到最后平均
             class_high = F.interpolate(class_high, feat_src.size()[2:], mode="nearest")
 
-            source_label_one = process_label(device, source_label.to(device))
-            pred_label = process_label(device, F.softmax(class_high, dim=1).argmax(dim=1, keepdim=True).float())
+            source_label_one = process_label(device, source_label.to(device), cfg)
+            pred_label = process_label(device, F.softmax(class_high, dim=1).argmax(dim=1, keepdim=True).float(), cfg)
             pred_correct = source_label_one * pred_label
             scale_factor = F.adaptive_avg_pool2d(pred_correct, output_size=1)
 
             for n in range(feat_src.size(0)):
-                for t in range(19):
+                for t in range(cfg.NUM_CLASSES):
                     if scale_factor[n][t] == 0 or (pred_correct > 0).sum() < 1:
                         continue
                     s = feat_src[n] * pred_correct[n][t]
@@ -531,9 +532,9 @@ def calculate_src_center(source_all_dataloader, device, network):
         src_center = [torch.cat(feat_dict[cls], 0).mean(0, True) for cls in sorted(feat_dict.keys())]  # (19, 256)
         src_center = torch.cat(src_center, 0)
         src_center = F.normalize(src_center, dim=1)  # 19, 2048 normalize 1*2048 vector
-        print(feat_dict[1][0].shape)
-        assert src_center.size(0) == 19, "the shape of source center is incorrect {}, {}".format(
-            src_center.size(), feat_dict.keys(), feat_dict[1][0].shape)
+        print(feat_dict[1][0].shape, feat_dict.keys())
+        assert src_center.size(0) == cfg.NUM_CLASSES, "the shape of source center is incorrect {}, {}".format(src_center.size(), feat_dict.keys(), feat_dict[1][0].shape)
+
         # normailze will not interfere feature diversity, cause tgt_centers aren't lack
 
         return src_center
@@ -555,8 +556,7 @@ def calculate_tgt_center(target_train_dataloader, device, network, num_classes, 
             for n in range(output_target.size(0)):
                 for t in range(num_classes):
                     distance[n][t] = torch.norm(
-                        output_target[n] - src_center[t].reshape((src_center[t].size(0), 1, 1)).to(
-                            device),
+                        output_target[n] - src_center[t].reshape((src_center[t].size(0), 1, 1)).to(device),
                         dim=0)  # 160, 320
 
             dis_min, dis_min_idx = distance.min(dim=1, keepdim=True)  # 4, 1, 160, 320
@@ -568,7 +568,7 @@ def calculate_tgt_center(target_train_dataloader, device, network, num_classes, 
             if config.TRAIN.ignore_instances:
                 dis_min_idx[instmask] = 255
 
-            pred_label = process_label(device, dis_min_idx.float())
+            pred_label = process_label(device, dis_min_idx.float(), config)
             scale_factor = F.adaptive_avg_pool2d(pred_label, output_size=1)
 
             for n in range(pred_label.size(0)):
@@ -580,22 +580,21 @@ def calculate_tgt_center(target_train_dataloader, device, network, num_classes, 
                     # average pool 除以特征图大小求平均，每个类都一样，因此需要除以权重因子
                     feat_dict[t].append(s.unsqueeze(0).squeeze(2).squeeze(2))
 
-            if i == 300:
+            if i == 1600:
                 break
 
         tgt_center = [torch.cat(feat_dict[cls], 0).mean(0, keepdim=True) for cls in sorted(feat_dict.keys())]
         tgt_center = F.normalize(torch.cat(tgt_center, dim=0), dim=1)
-        assert tgt_center.size(0) == 19, "the shape of tgt_center is incorrect {}, {}".format(
-            tgt_center.size(), feat_dict.keys())
+        assert tgt_center.size(0) == config.NUM_CLASSES, "the shape of tgt_center is incorrect {}, {}".format(tgt_center.size(), feat_dict.keys())
 
         return tgt_center
 
 
-def tsne(source_all_dataloader, device, network):
+def tsne(target_dataloader, device, network):
     from matplotlib import pyplot as plt
 
     with torch.no_grad():
-        for i, (src_img, source_label, _, _) in tqdm(enumerate(source_all_dataloader)):
+        for i, (src_img, source_label, _, _) in tqdm(enumerate(target_dataloader)):
             src_img = src_img.to(device)
             output_source, _ = network(src_img)  # 4, 256, 160, 320
             source_label = F.interpolate(source_label.unsqueeze(1), (160, 320), mode="bilinear",
@@ -618,19 +617,6 @@ def tsne(source_all_dataloader, device, network):
                     plt.text(X_norm[ii, 0], X_norm[ii, 1], str(source_label[ii][0]),
                              color=plt.cm.Set1(source_label[ii][0]),
                              fontdict={'weight': 'bold', 'size': 6})
-            plt.savefig("MAX_reshape_tsne_batch{}.png".format(i))
-            print("saved MAX_reshape_tsne_batch{}.png".format(i))
+            plt.savefig("MAX_reshape_tsne_iteration{}.png".format(i))
+            print("saved MAX_reshape_tsne_iteration{}.png".format(i))
 
-
-def process_label(device, label):
-    """
-    :desc: turn the label into one-hot format
-    """
-    batch, channel, w, h = label.size()
-    pred1 = torch.zeros(batch, 20, w, h).to(device)
-    # Return a tensor of elements selected from either :attr`x` or :attr:`y`,
-    # depending on :attr:`condition
-    label_trunk = torch.where(label < 19, label, torch.Tensor([19]).to(device))
-    #  place 1 on label place (replace figure > 19 with 19)
-    pred1 = pred1.scatter_(1, label_trunk.long(), 1)
-    return pred1

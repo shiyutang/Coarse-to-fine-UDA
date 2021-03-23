@@ -1,9 +1,8 @@
 # --------------------------------------------------------
-# Domain adpatation evaluation
-# Copyright (c) 2019 valeo.ai
-#
-# Written by Tuan-Hung Vu
+# Written by Shiyu Tang
+# Adapted from https://github.com/valeoai/ADVENT/tree/master/advent
 # --------------------------------------------------------
+import copy
 import json
 import logging
 import os
@@ -86,7 +85,7 @@ def eval_best(cfg, models, device, test_loader, source_loader, interp, fixed_tes
 
     cur_best_miou = -1
     cur_best_model = ''
-    eval = Eval(cfg.NUM_CLASSES)
+    eval = Eval(19)
     logger = init_logger(cfg)
     writer = SummaryWriter(log_dir=cfg.TRAIN.TENSORBOARD_LOGDIR)
 
@@ -153,65 +152,84 @@ def eval_best(cfg, models, device, test_loader, source_loader, interp, fixed_tes
                 logger.info('\tCurrent target PA: {}, MPA: {}, MIoU: {}, FWIoU: {},'.format(PA, MPA, MIoU, FWIoU))
 
             # validate_source
-            eval.reset()
-            source_iter = iter(source_loader)
-            for _ in tqdm(range(500)):
-                image, label, _, name = next(source_iter)  # 3, 1024, 512 np array
-                resize = nn.Upsample(size=(label.shape[1], label.shape[2]), mode='bilinear', align_corners=True)
-                with torch.no_grad():
-                    _, pred_main, f_out_s = models[0](image.cuda(device))
-                    output = resize(pred_main).cpu().data[0].numpy()  # 19, 2048, 1024
-                    output = output.transpose(1, 2, 0)  #
-                    output = np.argmax(output, axis=2)
+            if cfg.TEST.validate_source:
+                eval.reset()
+                source_iter = iter(source_loader)
+                for _ in tqdm(range(500)):
+                    image, label, _, name = next(source_iter)  # 3, 1024, 512 np array
+                    resize = nn.Upsample(size=(label.shape[1], label.shape[2]), mode='bilinear', align_corners=True)
+                    with torch.no_grad():
+                        _, pred_main, f_out_s = models[0](image.cuda(device))
+                        output = resize(pred_main).cpu().data[0].numpy()  # 19, 2048, 1024
+                        output = output.transpose(1, 2, 0)  #
+                        output = np.argmax(output, axis=2)
 
-                label = label.numpy()[0]
-                eval.add_batch(label, output)
-            else:
-                epoch = i_iter // step
-                labels_colors = decode_labels(np.expand_dims(label, axis=0), 2)
-                preds_colors = decode_labels(np.expand_dims(output, axis=0), 2)
-                for index, (img, lab, color_pred) in enumerate(zip(image, labels_colors, preds_colors)):
-                    writer.add_image(str(epoch) + '/src_Images', img, epoch)
-                    writer.add_image(str(epoch) + '/src_Labels', lab, epoch)
-                    writer.add_image(str(epoch) + '/src_preds', color_pred, epoch)
+                    label = label.numpy()[0]
+                    eval.add_batch(label, output)
+                else:
+                    epoch = i_iter // step
+                    labels_colors = decode_labels(np.expand_dims(label, axis=0), 2)
+                    preds_colors = decode_labels(np.expand_dims(output, axis=0), 2)
+                    for index, (img, lab, color_pred) in enumerate(zip(image, labels_colors, preds_colors)):
+                        writer.add_image(str(epoch) + '/src_Images', img, epoch)
+                        writer.add_image(str(epoch) + '/src_Labels', lab, epoch)
+                        writer.add_image(str(epoch) + '/src_preds', color_pred, epoch)
 
-                def val_info(Eval, name):
-                    PA = Eval.Pixel_Accuracy()
-                    MPA = Eval.Mean_Pixel_Accuracy()
-                    MIoU = Eval.Mean_Intersection_over_Union()
-                    FWIoU = Eval.Frequency_Weighted_Intersection_over_Union()
-                    PC = Eval.Mean_Precision()
-                    logger.info("########## Eval{} ############".format(name))
+                    def val_info(Eval, name):
+                        PA = Eval.Pixel_Accuracy()
+                        MPA = Eval.Mean_Pixel_Accuracy()
+                        MIoU = Eval.Mean_Intersection_over_Union()
+                        FWIoU = Eval.Frequency_Weighted_Intersection_over_Union()
+                        PC = Eval.Mean_Precision()
+                        logger.info("########## Eval{} ############".format(name))
 
-                    logger.info('\nEpoch:{:.3f}, {} PA1:{:.3f}, MPA1:{:.3f}, MIoU1:{:.3f}, FWIoU1:{:.3f}, PC:{:.3f}'.
-                                format(epoch, name, PA, MPA, MIoU, FWIoU, PC))
-                    Eval.Print_Every_class_Eval(logger=logger)
+                        logger.info('\nEpoch:{:.3f}, {} PA1:{:.3f}, MPA1:{:.3f}, MIoU1:{:.3f}, FWIoU1:{:.3f}, PC:{:.3f}'.
+                                    format(epoch, name, PA, MPA, MIoU, FWIoU, PC))
+                        Eval.Print_Every_class_Eval(logger=logger)
 
-                    writer.add_scalar('PA' + name, PA, epoch)
-                    writer.add_scalar('MPA' + name, MPA, epoch)
-                    writer.add_scalar('MIoU' + name, MIoU, epoch)
-                    writer.add_scalar('FWIoU' + name, FWIoU, epoch)
-                    return PA, MPA, MIoU, FWIoU
+                        writer.add_scalar('PA' + name, PA, epoch)
+                        writer.add_scalar('MPA' + name, MPA, epoch)
+                        writer.add_scalar('MIoU' + name, MIoU, epoch)
+                        writer.add_scalar('FWIoU' + name, FWIoU, epoch)
+                        return PA, MPA, MIoU, FWIoU
 
-                PA_src, MPA_src, MIoU_src, FWIoU_src = val_info(eval, "source")
-                logger.info('\tCurrent source PA: {}, MPA: {}, MIoU: {}, FWIoU: {},'.format(PA_src, MPA_src, MIoU_src,
-                                                                                            FWIoU_src))
+                    PA_src, MPA_src, MIoU_src, FWIoU_src = val_info(eval, "source")
+                    logger.info('\tCurrent source PA: {}, MPA: {}, MIoU: {}, FWIoU: {},'.format(PA_src, MPA_src, MIoU_src,
+                                                                                                FWIoU_src))
 
             inters_over_union_classes = per_class_iu(hist)
-            all_res[i_iter] = inters_over_union_classes
+            if "SYNTHIA" in cfg.SOURCE:
+                synthia_set_16 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 17, 18]
+                inters_over_union_classes_new = []
+                for ele in synthia_set_16:
+                    inters_over_union_classes_new.append(inters_over_union_classes[ele])
+                inters_over_union_classes_new = np.array(inters_over_union_classes_new)
+                all_res[i_iter] = inters_over_union_classes_new
+            else:
+                all_res[i_iter] = inters_over_union_classes
             pickle_dump(all_res, cache_path)
         else:
-            inters_over_union_classes = all_res[i_iter]
+            if "SYNTHIA" in cfg.SOURCE:
+                inters_over_union_classes_new = all_res[i_iter]
+            else:
+                inters_over_union_classes = all_res[i_iter]
 
-        computed_miou = round(np.nanmean(inters_over_union_classes) * 100, 2)
+        if "SYNTHIA" in cfg.SOURCE:
+            computed_miou = round(np.nanmean(inters_over_union_classes_new) * 100, 2)
+            logger.info("the mIOU for synthia is {}".format(computed_miou))
+        else:
+            computed_miou = round(np.nanmean(inters_over_union_classes) * 100, 2)
         if cur_best_miou < computed_miou:
             cur_best_miou = computed_miou
             cur_best_model = restore_from
 
-        logger.info('\tCurrent best model:', cur_best_model)
-        logger.info('\tCurrent best mIoU:', cur_best_miou)
+        logger.info('\tCurrent best model:{}'.format(cur_best_model))
+        logger.info('\tCurrent best mIoU:{}'.format(cur_best_miou))
         if verbose:
-            display_stats(cfg, test_loader.dataset.class_names, inters_over_union_classes, logger)
+            if "SYNTHIA" in cfg.SOURCE:
+                display_stats(cfg, test_loader.dataset.class_names, inters_over_union_classes_new, logger)
+            else:
+                display_stats(cfg, test_loader.dataset.class_names, inters_over_union_classes, logger)
 
 
 def load_checkpoint_for_evaluation(model, checkpoint, device):
@@ -222,7 +240,8 @@ def load_checkpoint_for_evaluation(model, checkpoint, device):
 
 
 def display_stats(cfg, name_classes, inters_over_union_classes, logger=None):
-    for ind_class in range(cfg.NUM_CLASSES):
+    iter = cfg.NUM_CLASSES if cfg.SOURCE != "SYNTHIA" else 16
+    for ind_class in range(iter):
         if logger:
             logger.info(name_classes[ind_class]
                         + '\t' + str(round(inters_over_union_classes[ind_class] * 100, 2)))
