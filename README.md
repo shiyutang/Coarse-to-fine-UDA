@@ -7,8 +7,8 @@
 
 ## Abstract
 Previous feature alignment methods in Unsupervised domain adaptation(UDA) mostly only align global features without considering the mismatch between class-wise features. In this work, we propose a new coarse-to-fine feature alignment method using contrastive learning called CFContra. It draws class-wise features closer than coarse feature alignment or class-wise feature alignment only, therefore improves the model's performance to a great extent. We build it upon one of the most effective methods of UDA called entropy minimization to further improve performance. In particular, to prevent excessive memory occupation when applying contrastive loss in semantic segmentation, we devise a new way to build and update the memory bank. In this way, we make the algorithm more efficient and viable with limited memory. Extensive experiments show the effectiveness of our method and model trained on the GTA5 to Cityscapes dataset has boost mIOU by 3.5 compared to the MinEnt algorithm. Our code will be publicly available.
-## Demo
-[![](http://img.youtube.com/vi/Ihmz0yEqrq0/0.jpg)](http://www.youtube.com/watch?v=Ihmz0yEqrq0 "")
+//## Demo
+//[![](http://img.youtube.com/vi/Ihmz0yEqrq0/0.jpg)](http://www.youtube.com/watch?v=Ihmz0yEqrq0 "")
 
 ## Preparation
 
