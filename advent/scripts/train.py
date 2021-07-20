@@ -62,7 +62,7 @@ def main():
     if cfg.TRAIN.SNAPSHOT_DIR == '':
         cfg.TRAIN.SNAPSHOT_DIR = osp.join(cfg.EXP_ROOT_SNAPSHOT, cfg.EXP_NAME)
         os.makedirs(cfg.TRAIN.SNAPSHOT_DIR, exist_ok=True)
-    shutil.copytree("../../advent/", osp.join(cfg.TRAIN.SNAPSHOT_DIR, "advent"), dirs_exist_ok=True)
+    # shutil.copytree("../../advent/", osp.join(cfg.TRAIN.SNAPSHOT_DIR, "advent"))
     device = cfg.GPU_ID
 
     # tensorboard
@@ -107,6 +107,8 @@ def main():
             model.load_state_dict(saved_state_dict, strict=False)
     else:
         raise NotImplementedError(f"Not yet supported {cfg.TRAIN.MODEL}")
+    # model = nn.DataParallel(model)
+    # model.cuda()
     model.to(device)
     print('Model loaded from {}'.format(cfg.TRAIN.RESTORE_FROM))
 
