@@ -17,7 +17,7 @@ from advent.utils.serialization import yaml_load
 cfg = EasyDict()
 
 # COMMON CONFIGS
-cfg.name = '0227_ADAIN_cityscapes_addcontra_clossw0.001_0.07temp_0.99momentum_moco_rstrcitybest_realdst'
+cfg.name = '0719_addcontra_clossw0.001_0.07temp_0.9momentum_moco'
 # source domain
 cfg.SOURCE = 'GTA5'
 # target domaino'p
@@ -29,10 +29,10 @@ cfg.DATA_LIST_SOURCE = str(project_root / 'advent/dataset/gta5_list/{}.txt')
 cfg.DATA_LIST_TARGET = str(project_root / 'advent/dataset/cityscapes_list/{}.txt')
 cfg.DATA_LIST_SOURCE_SYNTHIA = str(project_root / 'advent/dataset/synthia_list/{}.txt')
 # Directories
-cfg.DATA_DIRECTORY_SOURCE = str(project_root / '../CSUDA/data/style_transform/0220_alpha1_weights1_cityscapes_resize512crop256_bs4')
-cfg.DATA_DIRECTORY_TARGET = str(project_root / '../CSUDA/data/style_transform/0220_alpha1_weights1_cityscapes_resize512crop256_bs4/Cityscapes')
-cfg.DATA_DIRECTORY_SOURCE_SYNTHIA = str(project_root / '../CSUDA/data/Synthia')
-cfg.DATA_DIRECTORY_STYLE = str(project_root / '../CSUDA/data/ambulance')
+cfg.DATA_DIRECTORY_SOURCE = str(project_root / '../data/GTA5')
+cfg.DATA_DIRECTORY_TARGET = str(project_root / '../data/cityscapes')
+cfg.DATA_DIRECTORY_SOURCE_SYNTHIA = str(project_root / '../data/Synthia')
+cfg.DATA_DIRECTORY_STYLE = str(project_root / '../data/cityscapes/train/ambulance')
 # Number of object classes
 cfg.NUM_CLASSES = 19
 # Exp dirs
@@ -41,7 +41,7 @@ cfg.EXP_ROOT = project_root / 'experiments'
 cfg.EXP_ROOT_SNAPSHOT = osp.join(cfg.EXP_ROOT, 'snapshots')
 cfg.EXP_ROOT_LOGS = osp.join(cfg.EXP_ROOT, 'logs')
 # CUDA
-cfg.GPU_ID = "cuda:1"
+cfg.GPU_ID = "cuda:0"
 
 # TRAIN CONFIGS
 cfg.TRAIN = EasyDict()
@@ -85,7 +85,7 @@ cfg.TRAIN.LAMBDA_ENT_AUX = 0.0002
 cfg.TRAIN.switchcontra = True
 cfg.TRAIN.head_mode = 'moco'
 cfg.TRAIN.contra_temp = 0.07
-cfg.TRAIN.contra_momentum = 0.99
+cfg.TRAIN.contra_momentum = 0.9
 cfg.TRAIN.LAMBDA_CONTRA_S = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_T = 0.001
 cfg.TRAIN.LAMBDA_CONTRA_T2S = 0.001

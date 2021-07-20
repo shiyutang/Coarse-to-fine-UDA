@@ -236,13 +236,13 @@ def train_minent(model, trainloader, targetloader, cfg):
         # initialize HybridMemory
         # src_center = calculate_src_center(trainloader, device, model, cfg)
         # torch.save(src_center, "../../src_center_{}_300.pkl".format(cfg.name))
-        src_center = torch.load("../../src_center_{}_300.pkl".format(cfg.name))
-        # src_center = torch.load("./src_center_minent_20.pkl").to(device)
+        # src_center = torch.load("../../src_center_{}_300.pkl".format(cfg.name))
+        src_center = torch.load("./src_center_minent_20.pkl").to(device)
 
-        tgt_center = calculate_tgt_center(targetloader, device, model, cfg.NUM_CLASSES, src_center, cfg)
-        torch.save(tgt_center, "../../tgt_center_{}_300.pkl".format(cfg.name))
+        # tgt_center = calculate_tgt_center(targetloader, device, model, cfg.NUM_CLASSES, src_center, cfg)
+        # torch.save(tgt_center, "../../tgt_center_{}_300.pkl".format(cfg.name))
         # tgt_center = torch.load("../../tgt_center_0226_ADAIN_cityscapes_addcontra_clossw0.001_0.07temp_0.99momentum_moco_rstrcitybest_300.pkl").to(device)
-        # tgt_center = torch.load("./tgt_center_minent_20.pkl".format(cfg.name)).to(device)
+        tgt_center = torch.load("./tgt_center_minent_20.pkl".format(cfg.name)).to(device)
 
         # Hybrid memory 存储源域的原型（需要每次迭代更新）和目标域的聚类后的原型，聚类时根据判别标准进行选择
         src_memory = HybridMemory(model.num_features, cfg.NUM_CLASSES,

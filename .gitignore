@@ -2,11 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-advent/utils/__pycache__
-advent/model/__pycache__
-advent/domain_adaptation/__pycache__
-advent/dataset/__pycache__
-advent/__pycache__
+
 
 # C extensions
 *.so
@@ -112,3 +108,8 @@ experiments/
 pretrained_models/
 src_center_0719_addcontra_clossw0.001_0.07temp_0.9momentum_moco_end.pkl
 tgt_center_0719_addcontra_clossw0.001_0.07temp_0.9momentum_moco_end.pkl
+advent/utils/__pycache__/
+advent/model/__pycache__/
+advent/domain_adaptation/__pycache__/
+advent/dataset/__pycache__/
+advent/__pycache__/
